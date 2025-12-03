@@ -2659,7 +2659,6 @@ elif page == "About":
     - **AI Models:** OpenAI (gpt-4o, gpt-4o-mini, text-embedding-3-large)
     - **Alternative LLMs:** OpenAI, LM Studio (local)
     - **Search Engine:** SearxNG
-    - **Web Automation:** Selenium WebDriver
     - **Vector Store:** Simple in-memory keyword search
     - **Cloud Storage:** AWS S3 (boto3)
     - **Validation:** Pydantic
@@ -2687,7 +2686,7 @@ elif page == "About":
     - **Logs:** Check `research.log` for detailed operation logs
     - **S3 Status:** Run `python3 check_s3_status.py` to verify bucket contents
     - **Upload Missing Files:** Use `python3 upload_linkedin_to_s3.py` for backfill
-    - **LinkedIn:** Monitor uses standard Selenium, ensure ChromeDriver installed. A Linkedin account was created solely for this tool.
+    - **LinkedIn:** Posts are collected locally and uploaded to S3's `linkedin_data/` folder for display in the UI
 
     ---
     
@@ -2697,20 +2696,23 @@ elif page == "About":
 elif page == "LinkedIn Home Feed Monitor":
     st.header("📲 LinkedIn Home Feed Monitor")
     
+    # Import AgGrid
+    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+    
     st.markdown("""
     ### Overview
     
-    This tool automates the collection of posts from your LinkedIn home feed using browser automation. 
-    It filters out promoted/suggested/reposted content and collects authentic posts from your network.
+    View and manage LinkedIn posts collected from your home feed. Data is loaded from AWS S3 storage.
     
     **Features:**
-    - Automated LinkedIn login and feed scrolling
-    - Filters out ads, promoted posts, and reposts
-    - Extracts author, date, content, and URLs
-    - Automatic translation of non-English posts to English
-    - Live browser preview during scraping
-    - Saves results in CSV and JSON formats
-    - Automatic S3 backup and restore
+    - View all collected LinkedIn posts in an interactive table
+    - Full-text search across all fields
+    - Date filtering (last 7, 30, 90 days, or all time)
+    - Download filtered results as CSV or Excel
+    - S3 storage management (download/delete files)
+    
+    **Note:** LinkedIn posts must be collected locally using Selenium and uploaded to S3. 
+    This interface displays the collected data from the `linkedin_data/` folder in S3.
     """)
     
     st.divider()
@@ -2794,683 +2796,330 @@ elif page == "LinkedIn Home Feed Monitor":
     
     st.divider()
     
-    # Fixed credentials from environment
-    linkedin_username = os.getenv("LINKEDIN_USERNAME")
-    linkedin_password = os.getenv("LINKEDIN_PASSWORD")
+    # Load and display LinkedIn data from S3
+    st.subheader("📊 LinkedIn Posts Database")
     
-    # Configuration section
-    st.subheader("⚙️ Configuration")
-    
-    # Show tracking info (without exposing email)
-    st.info("🎯 **Tracking:** Posts from VCs and Companies including SOSV, Seed Capital, ADB Ventures, and portfolio network")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        scroll_method = st.selectbox(
-            "Scroll Method",
-            ["smooth", "to_bottom", "fixed_pixels", "by_viewport"],
-            index=0,
-            help="How to scroll the page: smooth (human-like), to_bottom (jump), fixed_pixels (fixed distance), by_viewport (screen height)"
-        )
+    try:
+        from aws_storage import get_storage
+        s3_storage = get_storage()
         
-        scroll_pause = st.slider(
-            "Scroll Pause (seconds)",
-            min_value=5,
-            max_value=20,
-            value=10,
-            help="Time to wait between scrolls for content to load"
-        )
+        # List all CSV files in linkedin_data folder
+        csv_files = s3_storage.list_files(prefix="linkedin_data/", suffix=".csv")
         
-        days_limit = st.slider(
-            "Days to Look Back",
-            min_value=1,
-            max_value=90,
-            value=30,
-            help="Stop scrolling when posts older than this many days are found"
-        )
-    
-    with col2:
-        enable_translation = st.checkbox(
-            "Enable Translation",
-            value=True,
-            help="Automatically translate non-English posts to English using OpenAI"
-        )
+        if not csv_files:
+            st.info("📭 No LinkedIn posts found in S3. Upload some CSV files to the `linkedin_data/` folder.")
+            st.stop()
         
-        output_dir = st.text_input(
-            "Output Directory",
-            value="linkedin_posts_monitor/linkedin_data",
-            help="Directory to save collected posts"
-        )
-    
-    st.divider()
-    
-    # Status and controls
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
-    with col1:
-        if 'linkedin_scraping' not in st.session_state:
-            st.session_state.linkedin_scraping = False
+        # Load all CSV files into a combined DataFrame
+        all_data = []
+        loaded_files = []
         
-        if st.session_state.linkedin_scraping:
-            st.warning("⏳ Scraping in progress... Please wait.")
-        else:
-            st.info("👉 Click 'Start Scraping' to begin collecting LinkedIn posts.")
-    
-    with col2:
-        start_button = st.button(
-            "🚀 Start Scraping",
-            disabled=st.session_state.get('linkedin_scraping', False),
-            use_container_width=True
-        )
-    
-    with col3:
-        if st.session_state.get('linkedin_scraping', False):
-            if st.button("⏹️ Stop", use_container_width=True):
-                st.session_state.linkedin_scraping = False
-                st.warning("Scraping stopped by user.")
-                st.rerun()
-    
-    st.divider()
-    
-    # Display area
-    status_container = st.container()
-    screenshot_container = st.container()
-    results_container = st.container()
-    
-    if start_button:
-        st.session_state.linkedin_scraping = True
-        
-        # Import required modules for LinkedIn scraping
-        import time
-        import json
-        import csv
-        import re
-        from datetime import datetime, timedelta
-        from pathlib import Path
-        from selenium import webdriver
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.chrome.options import Options
-        from selenium.common.exceptions import ElementClickInterceptedException
-        from openai import OpenAI
-        
-        # Status display
-        status_placeholder = status_container.empty()
-        screenshot_placeholder = screenshot_container.empty()
-        
-        # Helper functions from linkedin_homefeed.py
-        def is_english(text):
-            """Detect if text is in English using multiple heuristics"""
-            if not text or len(text.strip()) < 10:
-                return True
-            
-            text_lower = text.lower()
-            common_english_words = [
-                'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i',
-                'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at'
-            ]
-            
-            word_count = sum(1 for word in common_english_words 
-                           if f' {word} ' in f' {text_lower} ' or 
-                           text_lower.startswith(f'{word} ') or 
-                           text_lower.endswith(f' {word}'))
-            
-            words_in_text = len(text_lower.split())
-            if words_in_text > 0:
-                english_ratio = word_count / min(words_in_text, len(common_english_words))
-                if english_ratio >= 0.3:
-                    return True
-            
-            non_ascii_count = sum(1 for char in text if ord(char) > 127)
-            if non_ascii_count > len(text) * 0.2:
-                return False
-            
-            return word_count >= 5
-        
-        def translate_to_english(text, openai_client):
-            """Translate text to English using OpenAI API"""
-            if not text or not text.strip() or not openai_client:
-                return text
-            
-            if is_english(text):
-                return text
-            
-            try:
-                response = openai_client.chat.completions.create(
-                    model=os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini"),
-                    messages=[
-                        {"role": "system", "content": "You are a professional translator. Translate the following text to English. Only return the translated text, nothing else."},
-                        {"role": "user", "content": text}
-                    ],
-                    temperature=0.3,
-                    max_tokens=2000
-                )
-                
-                translated_text = response.choices[0].message.content.strip()
-                status_placeholder.info(f"🌐 Translated non-English post")
-                return translated_text
-                
-            except Exception as e:
-                status_placeholder.warning(f"⚠️ Translation failed: {str(e)[:50]}... Keeping original text.")
-                return text
-        
-        def parse_relative_date(relative_date_text):
-            """Convert LinkedIn's relative date format to actual datetime string"""
-            if not relative_date_text:
-                return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            text = relative_date_text.lower().strip()
-            now = datetime.now()
-            
-            patterns = [
-                (r'(\d+)\s*s(?:ec|econd)?s?\s*(?:ago)?', 'seconds'),
-                (r'(\d+)\s*m(?:in|inute)?s?\s*(?:ago)?', 'minutes'),
-                (r'(\d+)\s*h(?:r|our)?s?\s*(?:ago)?', 'hours'),
-                (r'(\d+)\s*d(?:ay)?s?\s*(?:ago)?', 'days'),
-                (r'(\d+)\s*w(?:eek)?s?\s*(?:ago)?', 'weeks'),
-                (r'(\d+)\s*mo(?:nth)?s?\s*(?:ago)?', 'months'),
-                (r'(\d+)\s*y(?:ear)?s?\s*(?:ago)?', 'years'),
-            ]
-            
-            post_time = now  # Initialize with current time
-            
-            for pattern, unit in patterns:
-                match = re.search(pattern, text)
-                if match:
-                    value = int(match.group(1))
-                    
-                    if unit == 'seconds':
-                        post_time = now - timedelta(seconds=value)
-                    elif unit == 'minutes':
-                        post_time = now - timedelta(minutes=value)
-                    elif unit == 'hours':
-                        post_time = now - timedelta(hours=value)
-                    elif unit == 'days':
-                        post_time = now - timedelta(days=value)
-                    elif unit == 'weeks':
-                        post_time = now - timedelta(weeks=value)
-                    elif unit == 'months':
-                        post_time = now - timedelta(days=value*30)
-                    elif unit == 'years':
-                        post_time = now - timedelta(days=value*365)
-                    
-                    return post_time.strftime("%Y-%m-%d %H:%M:%S")
-            
-            return now.strftime("%Y-%m-%d %H:%M:%S")
-        
-        def scroll_page(driver, method="smooth", pixels=800, speed="slow"):
-            """Scroll the page using different methods"""
-            if method == "to_bottom":
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            elif method == "fixed_pixels":
-                driver.execute_script(f"window.scrollBy(0, {pixels});")
-            elif method == "by_viewport":
-                driver.execute_script("window.scrollBy(0, window.innerHeight);")
-            elif method == "smooth":
-                speed_map = {"slow": 50, "medium": 100, "fast": 200}
-                step = speed_map.get(speed, 100)
-                viewport_height = driver.execute_script("return window.innerHeight;")
-                
-                for i in range(0, viewport_height, step):
-                    driver.execute_script(f"window.scrollBy(0, {step});")
-                    time.sleep(0.05)
-            
-            return driver.execute_script("return window.pageYOffset + window.innerHeight;")
-        
-        def parse_post(post_element, openai_client, enable_translation):
-            """Parse a LinkedIn post element with comprehensive author extraction"""
-            try:
-                # Skip promoted/suggested/reposted/liked posts
-                ad_badges = post_element.find_elements(By.XPATH, ".//*[contains(text(),'Promoted') or contains(text(),'Suggested') or contains(text(),'Reposted') or contains(text(),'Liked')]")
-                if ad_badges:
-                    return None
-
-                # Try multiple strategies to find author/company name
-                author = ""
-                
-                # Strategy 1: Look for aria-label with person/company name
+        with st.spinner(f"Loading {len(csv_files)} file(s) from S3..."):
+            for csv_file in csv_files:
                 try:
-                    author_links = post_element.find_elements(By.XPATH, ".//a[contains(@href, '/in/') or contains(@href, '/company/')]")
-                    for author_link in author_links:
-                        aria_label = author_link.get_attribute("aria-label")
-                        if aria_label and len(aria_label.strip()) > 0:
-                            # Filter out non-name labels
-                            if not any(x in aria_label.lower() for x in ['hashtag', 'like', 'comment', 'share', 'repost']):
-                                # Clean up the aria-label to extract just the name
-                                cleaned_name = aria_label.strip()
-                                cleaned_name = re.sub(r'^View\s+', '', cleaned_name, flags=re.IGNORECASE)
-                                cleaned_name = re.sub(r"'s?\s+(profile|page|link)\s*$", '', cleaned_name, flags=re.IGNORECASE)
-                                cleaned_name = re.sub(r'\s+profile\s*$', '', cleaned_name, flags=re.IGNORECASE)
-                                cleaned_name = re.sub(r',?\s*graphic\.?$', '', cleaned_name, flags=re.IGNORECASE)
-                                cleaned_name = re.sub(r'\s+graphic\s+(link|icon)?\s*$', '', cleaned_name, flags=re.IGNORECASE)
-                                cleaned_name = cleaned_name.strip()
-                                
-                                if cleaned_name and len(cleaned_name) > 1:
-                                    author = cleaned_name
-                                    break
-                except:
-                    pass
-                
-                # Strategy 2: Enhanced span selectors with more variations
-                if not author:
-                    author_selectors = [
-                        ".//span[contains(@class, 'feed-shared-actor__name')]//span[@aria-hidden='true']",
-                        ".//span[contains(@class, 'update-components-actor__name')]//span[@aria-hidden='true']",
-                        ".//div[contains(@class, 'update-components-actor__name')]//span[@aria-hidden='true']",
-                        ".//div[contains(@class, 'update-components-actor')]//span[@dir='ltr']",
-                        ".//a[contains(@class, 'app-aware-link')]//span[@dir='ltr'][1]",
-                        ".//span[contains(@class, 'feed-shared-actor__name')]",
-                        ".//div[contains(@class, 'feed-shared-actor__container-link')]//span[1]",
-                        ".//a[contains(@class, 'feed-shared-actor__container-link')]//span[not(@aria-hidden='true')]",
-                        ".//div[contains(@class, 'feed-shared-actor')]//a//span[1]",
-                        ".//span[contains(@class, 'update-components-actor__title')]//span[1]"
-                    ]
-                    for selector in author_selectors:
-                        try:
-                            elem = post_element.find_element(By.XPATH, selector)
-                            author = elem.text.strip()
-                            if author and len(author) > 0 and not author.startswith('•'):
-                                break
-                        except:
-                            continue
-                
-                # Strategy 3: Look for links with profile/company URLs and extract visible text
-                if not author:
-                    try:
-                        profile_links = post_element.find_elements(By.XPATH, ".//a[contains(@href, '/in/') or contains(@href, '/company/')]")
-                        for link in profile_links:
-                            text = link.text.strip()
-                            if text and len(text) > 2 and len(text) < 100:
-                                if not any(x in text.lower() for x in ['ago', 'edited', '•', 'follow', 'like', 'comment']):
-                                    cleaned_name = re.sub(r'^View\s+', '', text, flags=re.IGNORECASE)
-                                    cleaned_name = re.sub(r"'s?\s+(profile|page|link)\s*$", '', cleaned_name, flags=re.IGNORECASE)
-                                    cleaned_name = re.sub(r'\s+profile\s*$', '', cleaned_name, flags=re.IGNORECASE)
-                                    cleaned_name = cleaned_name.strip()
-                                    
-                                    if cleaned_name and len(cleaned_name) > 1:
-                                        author = cleaned_name
-                                        break
-                    except:
-                        pass
-                
-                # Final validation and cleanup
-                if author:
-                    author = author.split('•')[0].strip()
-                    author = author.split('\n')[0].strip()
-                    author = re.sub(r"'s?\s*$", '', author, flags=re.IGNORECASE)
-                    author = author.rstrip('.,')
-                    if len(author) > 150:
-                        author = ""
-                
-                if not author or len(author) < 2:
-                    return None
-
-                # Extract date with multiple selectors
-                relative_date = ""
-                date_selectors = [
-                    ".//span[contains(@class, 'feed-shared-actor__sub-description')]",
-                    ".//span[contains(@class, 'update-components-actor__sub-description')]",
-                    ".//time",
-                    ".//*[contains(text(), 'ago') or contains(text(), 'h') or contains(text(), 'd') or contains(text(), 'w')]"
-                ]
-                
-                for selector in date_selectors:
-                    try:
-                        elem = post_element.find_element(By.XPATH, selector)
-                        text = elem.text.strip()
-                        if any(indicator in text.lower() for indicator in ['ago', 'h', 'd', 'w', 'mo', 'yr', 'sec', 'min', 'hour', 'day', 'week', 'month', 'year']):
-                            relative_date = text
-                            break
-                    except:
-                        continue
-                
-                actual_datetime = parse_relative_date(relative_date) if relative_date else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                # Try to expand "see more" with multiple selectors
-                try:
-                    see_more_selectors = [
-                        ".//button[contains(@aria-label, 'more')]",
-                        ".//button[contains(text(), '…more')]",  # Ellipsis character
-                        ".//button[contains(text(), '...more')]",  # Three dots
-                        ".//button[contains(text(), 'see more')]",
-                        ".//button[contains(@class, 'see-more')]",
-                        ".//span[contains(@class, 'see-more')]//button",
-                        ".//button[contains(@aria-label, 'See more')]",
-                        ".//div[contains(@class, 'feed-shared-inline-show-more-text')]//button"
-                    ]
-                    
-                    for selector in see_more_selectors:
-                        try:
-                            see_more_button = post_element.find_element(By.XPATH, selector)
-                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", see_more_button)
-                            time.sleep(0.3)
-                            see_more_button.click()
-                            time.sleep(0.5)
-                            break
-                        except:
-                            continue
-                except:
-                    pass
-
-                # Extract content with multiple selectors
-                content = ""
-                content_selectors = [
-                    ".//div[contains(@class, 'feed-shared-update-v2__description')]",
-                    ".//div[contains(@class, 'update-components-text')]",
-                    ".//div[contains(@class, 'feed-shared-text')]",
-                    ".//span[contains(@class, 'break-words')]"
-                ]
-                for selector in content_selectors:
-                    try:
-                        content_elem = post_element.find_element(By.XPATH, selector)
-                        content = content_elem.text.strip()
-                        if content:
-                            break
-                    except:
-                        continue
-                
-                if enable_translation and content and openai_client:
-                    content = translate_to_english(content, openai_client)
-                
-                # Extract URLs
-                urls = " | ".join([a.get_attribute("href") for a in post_element.find_elements(By.TAG_NAME, "a") 
-                                  if a.get_attribute("href") and ("http" in a.get_attribute("href"))])
-
-                return {
-                    "Person/Company name": author,
-                    "Date of post": actual_datetime,
-                    "Content of post": content if content else "No content",
-                    "URLs": urls
-                }
-                
-            except Exception as e:
-                return None
-        
-        try:
-            # Initialize OpenAI if translation is enabled
-            openai_client = None
-            if enable_translation:
-                try:
-                    openai_client = OpenAI(
-                        api_key=os.getenv("OPENAI_API_KEY")
-                    )
+                    # Download to temporary location
+                    temp_path = Path(f"/tmp/{csv_file.split('/')[-1]}")
+                    if s3_storage.download_file(csv_file, str(temp_path)):
+                        df = pd.read_csv(temp_path)
+                        
+                        # Add source file metadata
+                        df['source_file'] = csv_file.split('/')[-1]
+                        
+                        all_data.append(df)
+                        loaded_files.append(csv_file.split('/')[-1])
+                        temp_path.unlink()
                 except Exception as e:
-                    status_placeholder.warning(f"⚠️ Could not initialize OpenAI: {e}\nTranslation disabled.")
+                    st.warning(f"Failed to load {csv_file}: {e}")
+        
+        if not all_data:
+            st.error("Failed to load any LinkedIn data from S3")
+            st.stop()
+        
+        # Combine all dataframes
+        combined_df = pd.concat(all_data, ignore_index=True)
+        
+        original_count = len(combined_df)
+        
+        # Deduplicate based on "Content of post" column
+        if 'Content of post' in combined_df.columns:
+            # Remove duplicates based on content, keeping the first occurrence
+            combined_df = combined_df.drop_duplicates(subset=['Content of post'], keep='first')
+            duplicates_removed = original_count - len(combined_df)
             
-            # Setup Chrome driver
-            chrome_options = Options()
-            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-            chrome_options.add_argument("--start-maximized")
-            
-            driver = webdriver.Chrome(options=chrome_options)
-            
-            # Login
-            status_placeholder.info("🌐 Opening LinkedIn login page...")
-            driver.get("https://www.linkedin.com/login")
-            driver.find_element(By.ID, "username").send_keys(linkedin_username)
-            driver.find_element(By.ID, "password").send_keys(linkedin_password)
-            driver.find_element(By.XPATH, "//button[@type='submit']").click()
-            time.sleep(5)
-            
-            # Show screenshot
-            screenshot = driver.get_screenshot_as_png()
-            screenshot_placeholder.image(screenshot, caption="Browser View", use_container_width=True)
-            
-            status_placeholder.success("✅ Login successful!")
-            
-            # Navigate to feed
-            status_placeholder.info("📰 Navigating to LinkedIn feed...")
-            driver.get("https://www.linkedin.com/feed/")
-            time.sleep(3)
-            
-            screenshot = driver.get_screenshot_as_png()
-            screenshot_placeholder.image(screenshot, caption="Browser View", use_container_width=True)
-            
-            # Collect posts
-            posts = set()
-            results = []
-            last_height = driver.execute_script("return document.body.scrollHeight")
-            start_time = time.time()
-            scroll_count = 0
-            cutoff_date = datetime.now() - timedelta(days=days_limit)
-            oldest_post_date = datetime.now()
-            posts_beyond_limit = 0  # Counter for consecutive posts beyond date limit
-            
-            status_placeholder.info(f"🔄 Starting to collect posts (looking back {days_limit} days, max 10 minutes)...")
-            
-            while st.session_state.linkedin_scraping:
-                # Find post elements
-                post_elements = driver.find_elements(By.XPATH, "//div[contains(@class,'feed-shared-update-v2')]")
-                
-                status_placeholder.info(f"Scroll #{scroll_count + 1}: Found {len(post_elements)} post elements")
-                
-                new_posts = 0
-                for post_element in post_elements:
-                    if post_element in posts:
-                        continue
-                    
-                    data = parse_post(post_element, openai_client, enable_translation)
-                    if data and data not in results:
-                        # Parse the post date to check if it's within the limit
-                        try:
-                            post_date = datetime.strptime(data["Date of post"], "%Y-%m-%d %H:%M:%S")
-                            
-                            # Track the oldest post we've seen
-                            if post_date < oldest_post_date:
-                                oldest_post_date = post_date
-                            
-                            # Check if post is within the date range
-                            if post_date >= cutoff_date:
-                                results.append(data)
-                                new_posts += 1
-                                posts_beyond_limit = 0  # Reset counter
-                            else:
-                                # Post is too old, increment counter
-                                posts_beyond_limit += 1
-                                
-                        except Exception as e:
-                            # If date parsing fails, still add the post
-                            results.append(data)
-                            new_posts += 1
-                    
-                    posts.add(post_element)
-                
-                scroll_count += 1
-                days_back = (datetime.now() - oldest_post_date).days
-                status_placeholder.info(f"✅ New posts: {new_posts} | Total collected: {len(results)} | Oldest: {days_back} days ago")
-                
-                # Update screenshot
-                screenshot = driver.get_screenshot_as_png()
-                screenshot_placeholder.image(screenshot, caption="Browser View", use_container_width=True)
-                
-                # Check if we've hit too many posts beyond the limit
-                if posts_beyond_limit >= 10:
-                    status_placeholder.success(f"✅ Reached {days_limit}-day limit! Found posts from {days_back} days ago.")
-                    break
-                
-                # Scroll
-                scroll_page(driver, method=scroll_method, speed="slow")
-                time.sleep(scroll_pause)
-                
-                new_height = driver.execute_script("return document.body.scrollHeight")
-                
-                if new_height == last_height:
-                    status_placeholder.info("⚠️ Reached end of feed")
-                    break
-                last_height = new_height
-                
-                # Time limit
-                if (time.time() - start_time) > 3600:  # 60 minutes
-                    status_placeholder.info("⏱️ Time limit reached (60 minutes)")
-                    break
-            
-            driver.quit()
-            
-            # Post-processing: Deduplication and URL filtering
-            if results:
-                status_placeholder.info("🔄 Post-processing: Removing duplicates and filtering URLs...")
-                
-                original_count = len(results)
-                
-                # Step 1: Deduplicate based on "Content of post"
-                seen_content = set()
-                deduplicated_results = []
-                
-                for post in results:
-                    content = post.get("Content of post", "").strip()
-                    
-                    # Skip if we've seen this exact content before
-                    if content and content != "No content" and content not in seen_content:
-                        seen_content.add(content)
-                        deduplicated_results.append(post)
-                    elif not content or content == "No content":
-                        # Keep posts with no content (they might have unique URLs)
-                        deduplicated_results.append(post)
-                
-                duplicates_removed = original_count - len(deduplicated_results)
-                status_placeholder.info(f"✓ Removed {duplicates_removed} duplicate posts")
-                
-                # Step 2: Filter URLs - Remove individual/company/hashtag links
-                def filter_urls(url_string):
-                    """Filter out LinkedIn profile, company, and hashtag URLs"""
-                    if not url_string or url_string.strip() == "":
-                        return ""
-                    
-                    urls = url_string.split(" | ")
-                    filtered_urls = []
-                    
-                    for url in urls:
-                        url_lower = url.lower()
-                        
-                        # Skip URLs that are profiles, companies, hashtags, or LinkedIn internal pages
-                        skip_patterns = [
-                            '/in/',           # Individual profiles
-                            '/company/',      # Company pages
-                            '/school/',       # School pages
-                            '/feed/',         # Feed links
-                            '/hashtag/',      # Hashtag pages
-                            '/groups/',       # Group pages
-                            '/showcase/',     # Showcase pages
-                            'linkedin.com/posts/',  # Direct post links
-                            'linkedin.com/pulse/',  # Pulse articles (keep these as they're content)
-                        ]
-                        
-                        # Keep pulse articles as they are actual content
-                        if 'linkedin.com/pulse/' in url_lower:
-                            filtered_urls.append(url)
-                            continue
-                        
-                        # Skip if URL matches any skip pattern
-                        should_skip = any(pattern in url_lower for pattern in skip_patterns[:-1])  # Exclude pulse from skip
-                        
-                        if not should_skip:
-                            # Keep external URLs and content URLs
-                            filtered_urls.append(url)
-                    
-                    return " | ".join(filtered_urls)
-                
-                # Apply URL filtering to all posts
-                urls_filtered_count = 0
-                for post in deduplicated_results:
-                    original_urls = post.get("URLs", "")
-                    filtered_urls = filter_urls(original_urls)
-                    
-                    if original_urls != filtered_urls:
-                        urls_filtered_count += 1
-                    
-                    post["URLs"] = filtered_urls
-                
-                status_placeholder.info(f"✓ Filtered URLs in {urls_filtered_count} posts (removed profile/company/hashtag links)")
-                
-                # Update results with processed data
-                results = deduplicated_results
-                
-                status_placeholder.success(f"✅ Post-processing complete! {len(results)} unique posts (removed {duplicates_removed} duplicates)")
-            
-            # Save results
-            if results:
-                Path(output_dir).mkdir(parents=True, exist_ok=True)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                
-                csv_filename = f"{output_dir}/linkedin_posts_{timestamp}.csv"
-                json_filename = f"{output_dir}/linkedin_posts_{timestamp}.json"
-                
-                with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
-                    fieldnames = ["Person/Company name", "Date of post", "Content of post", "URLs"]
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                    writer.writeheader()
-                    writer.writerows(results)
-                
-                with open(json_filename, 'w', encoding='utf-8') as jsonfile:
-                    json.dump(results, jsonfile, indent=2, ensure_ascii=False)
-                
-                # Upload to S3 if configured
-                try:
-                    from aws_storage import get_storage
-                    s3_storage = get_storage()
-                    
-                    # Upload both CSV and JSON to S3
-                    csv_s3_key = f"linkedin_data/linkedin_posts_{timestamp}.csv"
-                    json_s3_key = f"linkedin_data/linkedin_posts_{timestamp}.json"
-                    
-                    csv_uploaded = s3_storage.upload_file(csv_filename, csv_s3_key)
-                    json_uploaded = s3_storage.upload_file(json_filename, json_s3_key)
-                    
-                    if csv_uploaded and json_uploaded:
-                        status_placeholder.success(f"✅ Files uploaded to S3: s3://{s3_storage.bucket_name}/linkedin_data/")
-                    else:
-                        status_placeholder.warning("⚠️ Some files failed to upload to S3")
-                        
-                except Exception as e:
-                    status_placeholder.warning(f"⚠️ S3 upload skipped: {str(e)}")
-                
-                status_placeholder.success(f"✅ Collection complete! {len(results)} unique posts")
-                
-                # Display results with statistics
-                results_container.subheader("📊 Collected Posts")
-                
-                # Show statistics
-                stats_col1, stats_col2, stats_col3 = results_container.columns(3)
-                with stats_col1:
-                    st.metric("Total Posts", len(results))
-                with stats_col2:
-                    st.metric("Duplicates Removed", duplicates_removed)
-                with stats_col3:
-                    st.metric("URLs Filtered", urls_filtered_count)
-                
-                results_container.info("""
-                **Post-Processing Applied:**
-                - ✅ Deduplicated based on post content
-                - ✅ Removed profile/company/hashtag links
-                - ✅ Kept external article/video/document links
-                """)
-                
-                results_df = pd.DataFrame(results)
-                results_container.dataframe(results_df, use_container_width=True)
-                
-                results_container.download_button(
-                    "📥 Download CSV",
-                    data=open(csv_filename, 'rb').read(),
-                    file_name=f"linkedin_posts_{timestamp}.csv",
-                    mime="text/csv"
-                )
-                
-                results_container.download_button(
-                    "📥 Download JSON",
-                    data=open(json_filename, 'rb').read(),
-                    file_name=f"linkedin_posts_{timestamp}.json",
-                    mime="application/json"
-                )
+            if duplicates_removed > 0:
+                st.success(f"✅ Loaded {original_count} posts from {len(loaded_files)} file(s) | Removed {duplicates_removed} duplicates | {len(combined_df)} unique posts remaining")
             else:
-                status_placeholder.warning("⚠️ No posts collected")
-            
-        except Exception as e:
-            status_placeholder.error(f"❌ Error during scraping: {str(e)}")
-            if 'driver' in locals():
-                driver.quit()
+                st.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s) | No duplicates found")
+        else:
+            st.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s)")
         
-        finally:
-            st.session_state.linkedin_scraping = False
+        # Keep original column names as specified
+        # Ensure columns exist with exact names
+        expected_columns = ['Person/Company name', 'Date of post', 'Content of post', 'URLs']
+        
+        # Convert date column to datetime
+        if 'Date of post' in combined_df.columns:
+            combined_df['Date of post'] = pd.to_datetime(combined_df['Date of post'], errors='coerce')
+        
+        # Filters Section
+        st.markdown("### 🔍 Filters")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Start date filter
+            if 'Date of post' in combined_df.columns:
+                min_date = combined_df['Date of post'].min()
+                start_date = st.date_input(
+                    "📅 Start Date",
+                    value=min_date if pd.notna(min_date) else datetime.now() - timedelta(days=90),
+                    help="Select the start date for filtering posts"
+                )
+        
+        with col2:
+            # End date filter
+            if 'Date of post' in combined_df.columns:
+                max_date = combined_df['Date of post'].max()
+                end_date = st.date_input(
+                    "📅 End Date",
+                    value=max_date if pd.notna(max_date) else datetime.now(),
+                    help="Select the end date for filtering posts"
+                )
+        
+        with col3:
+            # Search box
+            search_query = st.text_input(
+                "🔎 Search (comma-separated for OR logic)",
+                placeholder="e.g., AI, climate, startup",
+                help="Search across all fields. Use commas to search multiple keywords (OR logic)."
+            )
+        
+        # Apply date filter
+        filtered_df = combined_df.copy()
+        
+        if 'Date of post' in filtered_df.columns:
+            # Convert date inputs to datetime for comparison
+            start_datetime = pd.Timestamp(start_date)
+            end_datetime = pd.Timestamp(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)  # Include end of day
+            
+            filtered_df = filtered_df[
+                (filtered_df['Date of post'] >= start_datetime) & 
+                (filtered_df['Date of post'] <= end_datetime)
+            ]
+        
+        # Apply search filter
+        if search_query:
+            keywords = [k.strip() for k in search_query.split(',') if k.strip()]
+            
+            if not keywords:
+                keywords = [search_query.strip()]
+            
+            # Apply OR logic across all columns
+            final_mask = pd.Series([False] * len(filtered_df), index=filtered_df.index)
+            
+            for keyword in keywords:
+                keyword_mask = pd.Series([False] * len(filtered_df), index=filtered_df.index)
+                
+                # Search in all columns
+                for col in filtered_df.columns:
+                    if col != 'source_file':  # Skip source_file in search
+                        keyword_mask |= filtered_df[col].astype(str).str.contains(keyword, case=False, na=False, regex=False)
+                
+                final_mask |= keyword_mask
+            
+            filtered_df = filtered_df[final_mask]
+            
+            if len(keywords) > 1:
+                st.caption(f"🔍 Searching for any of: {', '.join([f'**{k}**' for k in keywords])} (any match)")
+            else:
+                st.caption(f"🔍 Searching for: **{keywords[0]}**")
+        
+        st.info(f"Showing {len(filtered_df)} of {len(combined_df)} posts")
+        
+        st.divider()
+        
+        # Display results with AgGrid
+        st.subheader("📋 Results")
+        
+        if len(filtered_df) == 0:
+            st.warning("No posts match your filters.")
+        else:
+            # Prepare dataframe for display with original column names
+            display_columns = ['Person/Company name', 'Date of post', 'Content of post', 'URLs', 'source_file']
+            display_df = filtered_df[[col for col in display_columns if col in filtered_df.columns]].copy()
+            
+            # Format date column
+            if 'Date of post' in display_df.columns:
+                display_df['Date of post'] = display_df['Date of post'].dt.strftime('%Y-%m-%d %H:%M')
+            
+            # Reset index to show row numbers starting from 1
+            display_df = display_df.reset_index(drop=True)
+            
+            st.info(f"📊 Showing {len(display_df)} posts | Use search and filters in the table below")
+            
+            # Configure AgGrid options
+            gb = GridOptionsBuilder.from_dataframe(display_df)
+            
+            # Enable features
+            gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
+            gb.configure_side_bar(filters_panel=True, columns_panel=True)
+            gb.configure_default_column(
+                filterable=True,
+                sortable=True,
+                resizable=True,
+                wrapText=True,
+                autoHeight=True,
+                enableCellTextSelection=True,
+                editable=False
+            )
+            
+            # Configure specific columns
+            if 'Person/Company name' in display_df.columns:
+                gb.configure_column(
+                    'Person/Company name',
+                    headerName='Person/Company name',
+                    width=200,
+                    wrapText=True,
+                    enableCellTextSelection=True,
+                    editable=False
+                )
+            
+            if 'Date of post' in display_df.columns:
+                gb.configure_column(
+                    'Date of post',
+                    headerName='Date of post',
+                    width=150,
+                    enableCellTextSelection=True,
+                    editable=False
+                )
+            
+            if 'Content of post' in display_df.columns:
+                gb.configure_column(
+                    'Content of post',
+                    headerName='Content of post',
+                    width=500,
+                    wrapText=True,
+                    autoHeight=True,
+                    enableCellTextSelection=True,
+                    editable=False
+                )
+            
+            if 'URLs' in display_df.columns:
+                gb.configure_column(
+                    'URLs',
+                    headerName='URLs',
+                    width=300,
+                    wrapText=True,
+                    autoHeight=True,
+                    cellStyle={'word-break': 'break-all', 'white-space': 'normal'},
+                    enableCellTextSelection=True,
+                    editable=False
+                )
+            
+            if 'source_file' in display_df.columns:
+                gb.configure_column(
+                    'source_file',
+                    headerName='Source File',
+                    width=250,
+                    enableCellTextSelection=True,
+                    editable=False
+                )
+            
+            # Enable text selection (read-only mode)
+            gb.configure_grid_options(
+                enableCellTextSelection=True,
+                ensureDomOrder=True,
+                suppressRowClickSelection=True
+            )
+            
+            gridOptions = gb.build()
+            
+            # Configure default column options
+            gridOptions['defaultColDef']['wrapText'] = True
+            gridOptions['defaultColDef']['autoHeight'] = True
+            gridOptions['defaultColDef']['enableCellTextSelection'] = True
+            gridOptions['defaultColDef']['editable'] = False
+            
+            # Display AgGrid
+            grid_response = AgGrid(
+                display_df,
+                gridOptions=gridOptions,
+                data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                update_mode=GridUpdateMode.NO_UPDATE,
+                fit_columns_on_grid_load=False,
+                theme='streamlit',
+                height=600,
+                allow_unsafe_jscode=True,
+                enable_enterprise_modules=False,
+                reload_data=False
+            )
+            
+            st.divider()
+            
+            # Export options
+            st.subheader("📥 Export Data")
+            
+            # Prepare export dataframe without source_file column
+            export_df = filtered_df[['Person/Company name', 'Date of post', 'Content of post', 'URLs']].copy()
+            
+            # Format date for export
+            if 'Date of post' in export_df.columns:
+                export_df['Date of post'] = pd.to_datetime(export_df['Date of post']).dt.strftime('%Y-%m-%d %H:%M:%S')
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                # Export filtered data as CSV
+                csv_data = export_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📄 CSV (Filtered)",
+                    data=csv_data,
+                    file_name=f"linkedin_posts_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with col2:
+                # Export filtered data as JSON
+                json_data = export_df.to_json(orient='records', indent=2)
+                st.download_button(
+                    label="📊 JSON (Filtered)",
+                    data=json_data,
+                    file_name=f"linkedin_posts_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            
+            with col3:
+                # Export complete data as CSV
+                complete_export_df = combined_df[['Person/Company name', 'Date of post', 'Content of post', 'URLs']].copy()
+                if 'Date of post' in complete_export_df.columns:
+                    complete_export_df['Date of post'] = pd.to_datetime(complete_export_df['Date of post']).dt.strftime('%Y-%m-%d %H:%M:%S')
+                
+                csv_complete_data = complete_export_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📄 CSV (Complete)",
+                    data=csv_complete_data,
+                    file_name=f"linkedin_posts_complete_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with col4:
+                # Export complete data as JSON
+                json_complete_data = complete_export_df.to_json(orient='records', indent=2)
+                st.download_button(
+                    label="📊 JSON (Complete)",
+                    data=json_complete_data,
+                    file_name=f"linkedin_posts_complete_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+    
+    except Exception as e:
+        st.error(f"Error loading LinkedIn data: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
 
 # Footer
 st.sidebar.divider()
