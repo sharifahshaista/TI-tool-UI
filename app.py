@@ -3477,78 +3477,13 @@ st.sidebar.divider()
     
 st.sidebar.markdown("### ⚙️ Settings")
 
-# LLM Provider Configuration
+# LLM Provider Configuration - Display OpenAI info only
 st.sidebar.markdown("#### 🤖 LLM Provider")
-from config.model_config import MODEL_OPTIONS, get_available_providers
 
-# Get current provider from environment
-current_provider = os.getenv("LLM_PROVIDER", "openai").lower()
-
-# Map provider codes to display names
-provider_display_map = {
-    "openai": "OpenAI",
-    "lm_studio": "LM Studio (Local)"
-}
-
-# Get available providers
-available_providers = get_available_providers()
-
-# Create selectbox options - just use the available providers directly
-provider_options = []
-for code in available_providers:
-    display_name = provider_display_map.get(code, code)
-    provider_options.append(display_name)
-
-if provider_options:
-    # Find current selection
-    current_display = provider_display_map.get(current_provider, "LM Studio (Local)")
-    current_index = provider_options.index(current_display) if current_display in provider_options else 0
-    
-    selected_provider_display = st.sidebar.selectbox(
-        "Select LLM Provider",
-        provider_options,
-        index=current_index,
-        help="Choose which LLM provider to use for AI operations"
-    )
-    
-    # Reverse map display name to code
-    reverse_map = {v: k for k, v in provider_display_map.items()}
-    selected_provider = reverse_map.get(selected_provider_display, "lm_studio")
-    
-    # Update environment variable if changed
-    if selected_provider != current_provider:
-        os.environ["LLM_PROVIDER"] = selected_provider
-        st.sidebar.success(f"✅ Switched to {selected_provider_display}")
-    
-    # Show provider-specific info
-    if selected_provider == "openai":
-        model_name = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
-        st.sidebar.caption(f"Model: {model_name}")
-    elif selected_provider == "lm_studio":
-        base_url = os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
-        st.sidebar.caption(f"Server: {base_url}")
-        
-        # Try to get the actual loaded model name
-        try:
-            import requests
-            models_url = base_url.replace("/v1", "") + "/v1/models"
-            
-            response = requests.get(models_url, timeout=2)
-            if response.status_code == 200:
-                models_data = response.json()
-                if models_data.get("data") and len(models_data["data"]) > 0:
-                    loaded_model = models_data["data"][0].get("id", "Unknown")
-                    st.sidebar.success(f"✅ Model: `{loaded_model}`")
-                else:
-                    st.sidebar.warning("⚠️ No model loaded")
-            else:
-                st.sidebar.caption("💡 Ensure LM Studio is running with a model loaded")
-        except requests.exceptions.RequestException:
-            st.sidebar.warning("⚠️ Cannot connect to LM Studio")
-        except Exception:
-            st.sidebar.caption("💡 Ensure LM Studio is running with a model loaded")
-else:
-    st.sidebar.warning("⚠️ No LLM provider configured. Please set up your .env file.")
+# Display OpenAI as the provider
+model_name = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
+st.sidebar.info(f"**Provider:** OpenAI")
+st.sidebar.success(f"**Model:** `{model_name}`")
 
 st.sidebar.divider()
 st.sidebar.info(f"Session ID: {id(st.session_state)}")
