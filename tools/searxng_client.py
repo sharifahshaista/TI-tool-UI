@@ -1,6 +1,6 @@
 from pydantic_ai import RunContext
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 import re
 from typing import Optional
 
@@ -126,8 +126,8 @@ class SearxNGClient:
         
         for result in results:
             # Extract URL first to check if it should be excluded
-            url_elem = result.find("a", href=True)
-            url = str(url_elem["href"]) if url_elem else ""
+            url_elem = result.find("a", href=True)  # type: ignore[arg-type]
+            url = str(url_elem["href"]) if url_elem else ""  # type: ignore[index]
             
             # Skip excluded domains
             if self._is_excluded_url(url):
@@ -138,12 +138,12 @@ class SearxNGClient:
                 break
             
             # Extract title
-            title_elem = result.find("h3")
-            title = title_elem.get_text(strip=True) if title_elem else "No title"
+            title_elem = result.find("h3")  # type: ignore[arg-type]
+            title = title_elem.get_text(strip=True) if title_elem else "No title"  # type: ignore[union-attr]
             
             # Extract content/description
-            content_elem = result.find("p", class_="content")
-            content = content_elem.get_text(strip=True) if content_elem else "No description"
+            content_elem = result.find("p", class_="content")  # type: ignore[arg-type]
+            content = content_elem.get_text(strip=True) if content_elem else "No description"  # type: ignore[union-attr]
             
             # Clean up content (remove extra whitespace)
             content = re.sub(r'\s+', ' ', content)
