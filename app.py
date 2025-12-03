@@ -688,8 +688,12 @@ def get_base64_image(image_path):
     except:
         return None
 
+# Get the directory where the script is located
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_DIR = SCRIPT_DIR / "assets"
+
 # Get tool icon for sidebar title
-tool_icon = get_base64_image("/Users/sharifahshaista/TI-tool-UI/assets/tool_icon.png")
+tool_icon = get_base64_image(ASSETS_DIR / "tool_icon.png")
 
 # Display title with icon
 if tool_icon:
@@ -707,11 +711,11 @@ st.sidebar.markdown("AI-powered tool equipped with discovery of sources, a combi
 st.sidebar.markdown("<em>Click the radio buttons to navigate through them!</em>", unsafe_allow_html=True)
 
 # Get icon for Web Search
-web_search_icon = get_base64_image("/Users/sharifahshaista/TI-tool-UI/assets/websearch_icon.png") 
-folder_icon = get_base64_image("/Users/sharifahshaista/TI-tool-UI/assets/folder_icon.png") 
-chatbot_icon = get_base64_image("/Users/sharifahshaista/TI-tool-UI/assets/chatbot_icon.png") 
-about_icon = get_base64_image("/Users/sharifahshaista/TI-tool-UI/assets/about_icon.png")
-linkedin_icon = get_base64_image("/Users/sharifahshaista/TI-tool-UI/assets/linkedin_icon.png")
+web_search_icon = get_base64_image(ASSETS_DIR / "websearch_icon.png") 
+folder_icon = get_base64_image(ASSETS_DIR / "folder_icon.png") 
+chatbot_icon = get_base64_image(ASSETS_DIR / "chatbot_icon.png") 
+about_icon = get_base64_image(ASSETS_DIR / "about_icon.png")
+linkedin_icon = get_base64_image(ASSETS_DIR / "linkedin_icon.png")
 
 # Initialize selected page in session state
 if 'selected_page' not in st.session_state:
