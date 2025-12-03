@@ -1,0 +1,10 @@
+fonts-noto-color-emoji
+fonts-noto-cjk
+fonts-dejavu
+fonts-liberation
+xfonts-encodings
+xfonts-utils
+xfonts-75dpi
+xfonts-100dpi
+fontconfig
+libfontconfig1
