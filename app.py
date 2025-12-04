@@ -55,7 +55,7 @@ logging.basicConfig(
 
 # Set page configuration for wide layout
 st.set_page_config(
-    page_title="TI Agent",
+    page_title="TI tool",
     page_icon="🔬",
     layout="wide",  # Use full width of the page
     initial_sidebar_state="expanded"
@@ -708,7 +708,7 @@ else:
 
 st.sidebar.markdown("AI-powered tool equipped with discovery of sources, a combined database and chatbot")
 
-st.sidebar.markdown("<em>Click the radio buttons to navigate through them!</em>", unsafe_allow_html=True)
+st.sidebar.markdown("<em>Click the buttons below!</em>", unsafe_allow_html=True)
 
 # Get icon for Web Search
 web_search_icon = get_base64_image(ASSETS_DIR / "websearch_icon.png") 
@@ -986,10 +986,57 @@ elif page == "Database":
     st.header("📊 Database")
     st.markdown("Consolidated view of all summarised and processed crawled data with advanced search and filtering")
     
+    # Add reload button
+    col_header1, col_header2 = st.columns([6, 1])
+    with col_header2:
+        if st.button("🔄 Reload from S3", use_container_width=True, help="Download latest files from S3 and refresh the database"):
+            # Clear the cache to force reload
+            load_all_csvs.clear()
+            
+            # Clear local CSV files
+            summarised_dir = Path("summarised_content")
+            if summarised_dir.exists():
+                for csv_file in summarised_dir.glob("*.csv"):
+                    try:
+                        csv_file.unlink()
+                    except Exception as e:
+                        st.warning(f"Could not delete {csv_file.name}: {e}")
+            
+            # Download from S3
+            try:
+                from aws_storage import get_storage
+                s3_storage = get_storage()
+                
+                with st.spinner("📥 Downloading latest files from S3..."):
+                    summarised_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # List all CSV files in S3 summarised_content prefix
+                    s3_csv_files = s3_storage.list_files(prefix="summarised_content/", suffix=".csv")
+                    
+                    if s3_csv_files:
+                        downloaded_count = 0
+                        for s3_key in s3_csv_files:
+                            file_name = s3_key.split('/')[-1]
+                            local_path = summarised_dir / file_name
+                            
+                            if s3_storage.download_file(s3_key, str(local_path)):
+                                downloaded_count += 1
+                        
+                        if downloaded_count > 0:
+                            st.success(f"✅ Downloaded {downloaded_count} file(s) from S3")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ No files were downloaded")
+                    else:
+                        st.info("No CSV files found in S3 summarised_content folder")
+            except Exception as e:
+                st.error(f"❌ Error reloading from S3: {str(e)}")
+    
     # Add instructions
     with st.expander("ℹ️ How to use this page", expanded=False):
         st.markdown("""
         **Features:**
+        - **Reload from S3**: Click the 🔄 button to download the latest files from S3
         - **Multi-file Selection**: Select multiple source files and dates to display simultaneously
         - **Row Selection**: Use checkboxes to select multiple rows to view details
         - **Search & Filter**: Use the search box and column filters to find specific entries
@@ -997,6 +1044,7 @@ elif page == "Database":
         - **Export**: Download filtered or complete database as CSV, JSON, or Excel
         
         **Tips:**
+        - Use the reload button when new files are added to S3
         - Use the date range filter to find articles from specific time periods
         - Combine filters for more precise results
         - Export your filtered results in multiple formats
