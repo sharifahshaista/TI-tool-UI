@@ -1024,10 +1024,12 @@ elif page == "Database":
                             local_path = summarised_dir / file_name
                             
                             if s3_storage.download_file(s3_key, str(local_path)):
+                                st.success(f"✓ Downloaded: {file_name}")
                                 downloaded_count += 1
                         
                         if downloaded_count > 0:
                             st.success(f"✅ Downloaded {downloaded_count} file(s) from S3")
+                            time.sleep(5)  # Display messages for 5 seconds
                             # Clear the flag and rerun
                             st.session_state.reload_database = False
                             st.rerun()
@@ -1094,6 +1096,7 @@ elif page == "Database":
                     
                     if csv_files:
                         st.success(f"✅ Successfully retrieved {len(csv_files)} file(s) from S3")
+                        time.sleep(5)  # Display messages for 5 seconds
                 else:
                     st.info("No CSV files found in S3 summarised_content folder")
         except Exception as e:
@@ -2930,6 +2933,10 @@ elif page == "LinkedIn Home Feed Monitor":
                         
                         all_data.append(df)
                         loaded_files.append(csv_file.split('/')[-1])
+                        
+                        # Show download success message
+                        st.success(f"✓ Downloaded: {csv_file.split('/')[-1]}")
+                        
                         temp_path.unlink()
                 except Exception as e:
                     st.warning(f"Failed to load {csv_file}: {e}")
@@ -2937,6 +2944,10 @@ elif page == "LinkedIn Home Feed Monitor":
         if not all_data:
             st.error("Failed to load any LinkedIn data from S3")
             st.stop()
+        
+        # Show final success message
+        st.success(f"✅ Successfully retrieved {len(loaded_files)} file(s) from S3")
+        time.sleep(5)  # Display messages for 5 seconds
         
         # Combine all dataframes
         combined_df = pd.concat(all_data, ignore_index=True)
