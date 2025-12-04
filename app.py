@@ -1240,9 +1240,14 @@ elif page == "Database":
                 
                 combined_df['source'] = combined_df['source_file'].apply(create_source_from_filename)
             
-            # Rename old 'Start-up' column to new 'URL to start-up(s)' for backward compatibility
+            # Handle 'Start-up' column renaming - avoid duplicates
             if 'Start-up' in combined_df.columns:
-                combined_df = combined_df.rename(columns={'Start-up': 'URL to start-up(s)'})
+                # If 'URL to start-up(s)' already exists, drop the old 'Start-up' column
+                if 'URL to start-up(s)' in combined_df.columns:
+                    combined_df = combined_df.drop(columns=['Start-up'])
+                else:
+                    # Otherwise, rename 'Start-up' to 'URL to start-up(s)'
+                    combined_df = combined_df.rename(columns={'Start-up': 'URL to start-up(s)'})
             
             return combined_df, total_rows
         return None, 0
@@ -1564,10 +1569,10 @@ elif page == "Database":
                 editable=False
             )
         
-        if 'Start-up' in display_df.columns:
+        if 'URL to start-up(s)' in display_df.columns:
             gb.configure_column(
-                'Start-up', 
-                headerName='Url to start-up', 
+                'URL to start-up(s)', 
+                headerName='URL to start-up(s)', 
                 width=200,  # Wide enough for startup URLs
                 wrapText=True, 
                 enableCellTextSelection=True,
