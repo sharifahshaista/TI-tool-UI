@@ -321,6 +321,17 @@ st.markdown("""
     .stMultiSelect [data-baseweb="tag"] {
         white-space: normal !important;
         word-break: break-word !important;
+        max-width: none !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+    
+    /* Make the tag content not truncate */
+    .stMultiSelect [data-baseweb="tag"] > span {
+        max-width: none !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: normal !important;
     }
     
     /* Increase font size for sidebar markdown text (feature names) */
@@ -1368,7 +1379,7 @@ elif page == "Database":
         # Get latest date for each source
         source_dates = combined_df.groupby('source')['processed_date'].max().reset_index()
         
-        # Format the display: "Source Name - DD MMM YYYY"
+        # Format the display: "DD MMM - Source Name" (date first so it's visible in tags)
         source_display_options = []
         source_display_to_name = {}
         
@@ -1380,27 +1391,27 @@ elif page == "Database":
             if pd.notna(date_raw) and date_raw != 'unknown':
                 date_str = str(date_raw).split('_')[0]  # Take only YYYYMMDD part
                 if len(date_str) == 8 and date_str.isdigit():
-                    # Format as DD MMM YYYY
+                    # Format as DD MMM - shorter format to fit in widget tags
                     from datetime import datetime
                     date_obj = datetime.strptime(date_str, '%Y%m%d')
-                    formatted_date = date_obj.strftime('%d %b %Y')
-                    display_text = f"{source_name} - {formatted_date}"
+                    formatted_date = date_obj.strftime('%d %b')
+                    display_text = f"{formatted_date} - {source_name}"
                 else:
-                    display_text = f"{source_name} - {date_raw}"
+                    display_text = f"{date_raw} - {source_name}"
             else:
-                display_text = f"{source_name} - unknown date"
+                display_text = f"Unknown - {source_name}"
             
             source_display_options.append(display_text)
             source_display_to_name[display_text] = source_name
         
-        # Sort alphabetically
-        source_display_options = sorted(source_display_options)
+        # Sort by date (newest first) then by name
+        source_display_options = sorted(source_display_options, reverse=True)
         
         selected_source_displays = st.multiselect(
-            "📂 Sources (latest processed date shown)",
+            "📂 Sources (latest processed date)",
             options=source_display_options,
             default=source_display_options,  # All selected by default
-            help="Select one or more sources to display. The latest processed date for each source is shown."
+            help="Select sources to display. Format: 'DD MMM - Source Name' showing the latest processed date."
         )
         
         # Convert selected displays back to source names for filtering
