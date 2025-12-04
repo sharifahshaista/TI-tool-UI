@@ -731,22 +731,22 @@ features = [
     {
         "name": "Database",
         "icon": folder_icon,
-        "description": "Explore and filter combined database content containing crawled and summarised content"
+        "description": "Explore and filter combined database containing condensed crawled content"
     },
     {
         "name": "Chatbot",
         "icon": chatbot_icon,
-        "description": "Chat with your technology intelligence database using AI"
+        "description": "Chat with the combined database using retrieval augmented generation"
     },
     {
         "name": "LinkedIn Home Feed Monitor",
         "icon": linkedin_icon,
-        "description": "Monitor and analyse LinkedIn home feed content"
+        "description": "Monitor and analyse LinkedIn home feed content of a dedicated research account"
     },
     {
         "name": "About",
         "icon": about_icon,
-        "description": "Learn about the Technology Intelligence Tool"
+        "description": "Learn about the technicalities behind the tool"
     }
 ]
 
@@ -1362,46 +1362,58 @@ elif page == "Database":
     # Filters and Search
     st.subheader("🔍 Filters & Search")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Source file filter - changed to multiselect
-        # Create mapping from source name to source_file for display
-        source_mapping = combined_df[['source', 'source_file']].drop_duplicates()
-        source_display_to_file = dict(zip(source_mapping['source'], source_mapping['source_file']))
-        source_display_options = sorted(source_display_to_file.keys())
+    # Create a better source selection widget showing source name + latest date
+    # Group by source and get the latest processed date for each
+    if 'source' in combined_df.columns and 'processed_date' in combined_df.columns:
+        # Get latest date for each source
+        source_dates = combined_df.groupby('source')['processed_date'].max().reset_index()
         
-        selected_source_names = st.multiselect(
-            "Source Files (select one or more)",
+        # Format the display: "Source Name - DD MMM YYYY"
+        source_display_options = []
+        source_display_to_name = {}
+        
+        for _, row in source_dates.iterrows():
+            source_name = row['source']
+            date_raw = row['processed_date']
+            
+            # Parse the date (YYYYMMDD or YYYYMMDD_HHMMSS format)
+            if pd.notna(date_raw) and date_raw != 'unknown':
+                date_str = str(date_raw).split('_')[0]  # Take only YYYYMMDD part
+                if len(date_str) == 8 and date_str.isdigit():
+                    # Format as DD MMM YYYY
+                    from datetime import datetime
+                    date_obj = datetime.strptime(date_str, '%Y%m%d')
+                    formatted_date = date_obj.strftime('%d %b %Y')
+                    display_text = f"{source_name} - {formatted_date}"
+                else:
+                    display_text = f"{source_name} - {date_raw}"
+            else:
+                display_text = f"{source_name} - unknown date"
+            
+            source_display_options.append(display_text)
+            source_display_to_name[display_text] = source_name
+        
+        # Sort alphabetically
+        source_display_options = sorted(source_display_options)
+        
+        selected_source_displays = st.multiselect(
+            "📂 Sources (latest processed date shown)",
             options=source_display_options,
             default=source_display_options,  # All selected by default
-            help="Select one or more source files to display"
+            help="Select one or more sources to display. The latest processed date for each source is shown."
         )
         
-        # Convert selected source names back to source_file values for filtering
-        selected_sources = [source_display_to_file[name] for name in selected_source_names]
-    
-    with col2:
-        # Date range - display formatted dates but filter by raw dates
-        if 'processed_date' in combined_df.columns:
-            # Create mapping from display date to raw date for filtering
-            date_mapping = combined_df[['processed_date_display', 'processed_date']].drop_duplicates()
-            date_display_to_raw = dict(zip(date_mapping['processed_date_display'], date_mapping['processed_date']))
-            date_display_options = sorted(date_display_to_raw.keys())
-            
-            if len(date_display_options) > 1:
-                selected_date_displays = st.multiselect(
-                    "Processed Dates (select one or more)",
-                    options=date_display_options,
-                    default=date_display_options,  # All selected by default
-                    help="Select one or more dates to display"
-                )
-                # Convert selected display dates back to raw dates for filtering
-                selected_dates = [date_display_to_raw[display_date] for display_date in selected_date_displays]
-            else:
-                selected_dates = combined_df['processed_date'].unique().tolist()
-        else:
-            selected_dates = []
+        # Convert selected displays back to source names for filtering
+        selected_source_names = [source_display_to_name[display] for display in selected_source_displays]
+    else:
+        # Fallback to simple source selection
+        source_display_options = sorted(combined_df['source'].unique().tolist()) if 'source' in combined_df.columns else []
+        selected_source_names = st.multiselect(
+            "📂 Sources",
+            options=source_display_options,
+            default=source_display_options,
+            help="Select one or more sources to display"
+        )
     
     # Publication Date Range Filter
     if 'date' in combined_df.columns:
@@ -1455,17 +1467,10 @@ elif page == "Database":
     # Apply filters
     filtered_df = combined_df.copy()
     
-    # Filter by selected source files
-    if selected_sources:
-        filtered_df = filtered_df[filtered_df['source_file'].isin(selected_sources)]
+    # Filter by selected sources
+    if selected_source_names:
+        filtered_df = filtered_df[filtered_df['source'].isin(selected_source_names)]
     else:
-        # If nothing selected, show nothing
-        filtered_df = filtered_df.iloc[0:0]
-    
-    # Filter by selected dates
-    if 'processed_date' in combined_df.columns and selected_dates:
-        filtered_df = filtered_df[filtered_df['processed_date'].isin(selected_dates)]
-    elif 'processed_date' in combined_df.columns and not selected_dates:
         # If nothing selected, show nothing
         filtered_df = filtered_df.iloc[0:0]
     
