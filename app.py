@@ -1919,23 +1919,26 @@ elif page == "Chatbot":
                     for source in loaded_sources:
                         # Format: Source_embeddings_YYYYMMDD -> Source name (DD-MM-YYYY)
                         display_name = source
-                        # Extract date if present (YYYYMMDD pattern at the end)
                         import re
-                        date_match = re.search(r'_(\d{8})$', display_name)
+                        
+                        # Remove _embeddings first to simplify date matching
+                        cleaned_name = display_name.replace('_embeddings', '')
+                        
+                        # Look for YYYYMMDD pattern at the end
+                        date_match = re.search(r'_(\d{8})$', cleaned_name)
+                        
                         if date_match:
                             date_str = date_match.group(1)
-                            source_part = display_name[:date_match.start()]
-                            # Remove _embeddings suffix if present
-                            source_part = source_part.replace('_embeddings', '')
-                            # Convert to sentence case: replace underscores with spaces, capitalize first letter only
-                            source_part = source_part.replace('_', ' ').capitalize()
+                            source_part = cleaned_name[:date_match.start()]
+                            # Convert to sentence case: replace underscores/hyphens with spaces, capitalize first letter only
+                            source_part = source_part.replace('_', ' ').replace('-', ' ').capitalize()
                             # Format date as DD-MM-YYYY
                             formatted_date = f"{date_str[6:8]}-{date_str[4:6]}-{date_str[:4]}"
                             display_name = f"{source_part} ({formatted_date})"
                         else:
-                            # No date found, just remove _embeddings and format
-                            source_part = display_name.replace('_embeddings', '')
-                            display_name = source_part.replace('_', ' ').capitalize()
+                            # No date found, just format the name
+                            source_part = cleaned_name.replace('_', ' ').replace('-', ' ').capitalize()
+                            display_name = source_part
                         formatted_sources.append(display_name)
                     
                     # Sort alphabetically and display
@@ -1962,19 +1965,25 @@ elif page == "Chatbot":
                 # Format: Source_embeddings_YYYYMMDD -> Source name (DD-MM-YYYY)
                 display_name = idx_name
                 import re
-                date_match = re.search(r'_(\d{8})$', display_name)
+                
+                # Remove _embeddings first to simplify date matching
+                cleaned_name = display_name.replace('_embeddings', '')
+                
+                # Look for YYYYMMDD pattern at the end
+                date_match = re.search(r'_(\d{8})$', cleaned_name)
+                
                 if date_match:
                     date_str = date_match.group(1)
-                    source_part = display_name[:date_match.start()]
-                    source_part = source_part.replace('_embeddings', '')
-                    # Convert to sentence case: replace underscores with spaces, capitalize first letter only
-                    source_part = source_part.replace('_', ' ').capitalize()
+                    source_part = cleaned_name[:date_match.start()]
+                    # Convert to sentence case: replace underscores/hyphens with spaces, capitalize first letter only
+                    source_part = source_part.replace('_', ' ').replace('-', ' ').capitalize()
                     # Format date as DD-MM-YYYY
                     formatted_date = f"{date_str[6:8]}-{date_str[4:6]}-{date_str[:4]}"
                     display_name = f"{source_part} ({formatted_date})"
                 else:
-                    source_part = display_name.replace('_embeddings', '')
-                    display_name = source_part.replace('_', ' ').capitalize()
+                    # No date found, just format the name
+                    source_part = cleaned_name.replace('_', ' ').replace('-', ' ').capitalize()
+                    display_name = source_part
                 
                 formatted_options.append(display_name)
                 index_display_map[display_name] = idx_name
