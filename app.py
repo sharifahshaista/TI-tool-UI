@@ -1914,8 +1914,10 @@ elif page == "Chatbot":
                 
                 # Show which sources are loaded with date
                 with st.expander("📋 Loaded Sources", expanded=False):
+                    # Format and sort the sources
+                    formatted_sources = []
                     for source in loaded_sources:
-                        # Format: Source_embeddings_YYYYMMDD -> Source (YYYY-MM-DD)
+                        # Format: Source_embeddings_YYYYMMDD -> Source name (DD-MM-YYYY)
                         display_name = source
                         # Extract date if present (YYYYMMDD pattern at the end)
                         import re
@@ -1925,11 +1927,19 @@ elif page == "Chatbot":
                             source_part = display_name[:date_match.start()]
                             # Remove _embeddings suffix if present
                             source_part = source_part.replace('_embeddings', '')
-                            formatted_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+                            # Convert to sentence case: replace underscores with spaces, capitalize first letter only
+                            source_part = source_part.replace('_', ' ').capitalize()
+                            # Format date as DD-MM-YYYY
+                            formatted_date = f"{date_str[6:8]}-{date_str[4:6]}-{date_str[:4]}"
                             display_name = f"{source_part} ({formatted_date})"
                         else:
-                            # No date found, just remove _embeddings
-                            display_name = display_name.replace('_embeddings', '')
+                            # No date found, just remove _embeddings and format
+                            source_part = display_name.replace('_embeddings', '')
+                            display_name = source_part.replace('_', ' ').capitalize()
+                        formatted_sources.append(display_name)
+                    
+                    # Sort alphabetically and display
+                    for display_name in sorted(formatted_sources):
                         st.write(f"• {display_name}")
             elif st.session_state.chat_processor:
                 try:
@@ -1949,7 +1959,7 @@ elif page == "Chatbot":
             index_display_map = {}
             
             for idx_name in s3_available_indexes:
-                # Format: Source_embeddings_YYYYMMDD -> Source (YYYY-MM-DD)
+                # Format: Source_embeddings_YYYYMMDD -> Source name (DD-MM-YYYY)
                 display_name = idx_name
                 import re
                 date_match = re.search(r'_(\d{8})$', display_name)
@@ -1957,19 +1967,26 @@ elif page == "Chatbot":
                     date_str = date_match.group(1)
                     source_part = display_name[:date_match.start()]
                     source_part = source_part.replace('_embeddings', '')
-                    formatted_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+                    # Convert to sentence case: replace underscores with spaces, capitalize first letter only
+                    source_part = source_part.replace('_', ' ').capitalize()
+                    # Format date as DD-MM-YYYY
+                    formatted_date = f"{date_str[6:8]}-{date_str[4:6]}-{date_str[:4]}"
                     display_name = f"{source_part} ({formatted_date})"
                 else:
-                    display_name = display_name.replace('_embeddings', '')
+                    source_part = display_name.replace('_embeddings', '')
+                    display_name = source_part.replace('_', ' ').capitalize()
                 
                 formatted_options.append(display_name)
                 index_display_map[display_name] = idx_name
+            
+            # Sort alphabetically
+            formatted_options = sorted(formatted_options)
             
             # Multi-select widget for choosing which indexes to load
             selected_display_names = st.multiselect(
                 "Select embeddings to load:",
                 options=formatted_options,
-                default=formatted_options,  # No files selected by default - user must choose
+                default=formatted_options,  # All selected by default
                 help="Choose which embedding indexes to load from S3",
                 key="s3_embeddings_select"
             )
