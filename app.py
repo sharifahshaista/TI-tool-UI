@@ -1245,18 +1245,24 @@ elif page == "Database":
             startup_columns = [col for col in combined_df.columns if col in ['Start-up', 'URL to start-ups', 'URL to start-up(s)']]
             
             if startup_columns:
-                # If we have the standardized name, keep it
-                if 'URL to start-up(s)' in startup_columns:
-                    # Drop any other variations
-                    to_drop = [col for col in startup_columns if col != 'URL to start-up(s)']
-                    if to_drop:
-                        combined_df = combined_df.drop(columns=to_drop)
-                else:
-                    # Rename the first one we find to the standard name
-                    combined_df = combined_df.rename(columns={startup_columns[0]: 'URL to start-up(s)'})
-                    # Drop any remaining variations
-                    if len(startup_columns) > 1:
-                        combined_df = combined_df.drop(columns=startup_columns[1:])
+                # Create the standardized column by merging all variations
+                # This handles the case where different CSVs have different column names
+                if 'URL to start-up(s)' not in combined_df.columns:
+                    combined_df['URL to start-up(s)'] = ''
+                
+                # Merge data from all startup column variations into the standardized column
+                for col in startup_columns:
+                    if col != 'URL to start-up(s)':
+                        # Fill in values from this column where the standardized column is empty/NaN
+                        combined_df['URL to start-up(s)'] = combined_df['URL to start-up(s)'].fillna(combined_df[col])
+                        # Also handle empty strings
+                        mask = (combined_df['URL to start-up(s)'] == '') | (combined_df['URL to start-up(s)'].isna())
+                        combined_df.loc[mask, 'URL to start-up(s)'] = combined_df.loc[mask, col]
+                
+                # Now drop all the old variations
+                to_drop = [col for col in startup_columns if col != 'URL to start-up(s)']
+                if to_drop:
+                    combined_df = combined_df.drop(columns=to_drop)
             
             return combined_df, total_rows
         return None, 0
