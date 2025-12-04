@@ -1464,15 +1464,17 @@ elif page == "Database":
         # Reorder the dataframe (don't include remaining columns - strict ordering)
         display_df = display_df[ordered_cols]
         
+        # Fill NaN values with empty strings BEFORE converting to string
+        display_df = display_df.fillna('')
+        
         # Convert all object-type columns to string to avoid pyarrow conversion errors
         # This handles cases like TRL ranges ('6-7') and mixed-type columns
         for col in display_df.columns:
             if display_df[col].dtype == 'object':
                 display_df[col] = display_df[col].astype(str)
         
-        # Replace 'nan' strings with empty strings for cleaner display
-        display_df = display_df.replace('nan', '')
-        display_df = display_df.replace('None', '')
+        # Replace various representations of missing values with empty strings
+        display_df = display_df.replace(['nan', 'None', 'NaN', 'NA', 'N/A', '<NA>'], '')
         
         # Reset index to show row numbers starting from 1
         display_df = display_df.reset_index(drop=True)
@@ -1480,7 +1482,7 @@ elif page == "Database":
         # Convert categories from semicolon-separated to comma-separated for better display
         if 'categories' in display_df.columns:
             display_df['categories'] = display_df['categories'].apply(
-                lambda x: str(x).replace(';', ',') if pd.notna(x) and x != '' else ''
+                lambda x: str(x).replace(';', ',') if x and x != '' else ''
             )
         
         st.info(f"📊 Showing {len(display_df)} entries | Use search and filters in the table below")        
@@ -2971,6 +2973,17 @@ elif page == "LinkedIn Home Feed Monitor":
             # Format date column
             if 'Date of post' in display_df.columns:
                 display_df['Date of post'] = display_df['Date of post'].dt.strftime('%Y-%m-%d %H:%M')
+            
+            # Fill NaN values with empty strings BEFORE any other processing
+            display_df = display_df.fillna('')
+            
+            # Convert all object-type columns to string for consistent display
+            for col in display_df.columns:
+                if display_df[col].dtype == 'object':
+                    display_df[col] = display_df[col].astype(str)
+            
+            # Replace various representations of missing values with empty strings
+            display_df = display_df.replace(['nan', 'None', 'NaN', 'NA', 'N/A', '<NA>'], '')
             
             # Reset index to show row numbers starting from 1
             display_df = display_df.reset_index(drop=True)
