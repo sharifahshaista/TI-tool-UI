@@ -1240,14 +1240,23 @@ elif page == "Database":
                 
                 combined_df['source'] = combined_df['source_file'].apply(create_source_from_filename)
             
-            # Handle 'Start-up' column renaming - avoid duplicates
-            if 'Start-up' in combined_df.columns:
-                # If 'URL to start-up(s)' already exists, drop the old 'Start-up' column
-                if 'URL to start-up(s)' in combined_df.columns:
-                    combined_df = combined_df.drop(columns=['Start-up'])
+            # Handle Start-up column naming - standardize to 'URL to start-up(s)'
+            # CSV files may have: 'Start-up', 'URL to start-ups', or 'URL to start-up(s)'
+            startup_columns = [col for col in combined_df.columns if col in ['Start-up', 'URL to start-ups', 'URL to start-up(s)']]
+            
+            if startup_columns:
+                # If we have the standardized name, keep it
+                if 'URL to start-up(s)' in startup_columns:
+                    # Drop any other variations
+                    to_drop = [col for col in startup_columns if col != 'URL to start-up(s)']
+                    if to_drop:
+                        combined_df = combined_df.drop(columns=to_drop)
                 else:
-                    # Otherwise, rename 'Start-up' to 'URL to start-up(s)'
-                    combined_df = combined_df.rename(columns={'Start-up': 'URL to start-up(s)'})
+                    # Rename the first one we find to the standard name
+                    combined_df = combined_df.rename(columns={startup_columns[0]: 'URL to start-up(s)'})
+                    # Drop any remaining variations
+                    if len(startup_columns) > 1:
+                        combined_df = combined_df.drop(columns=startup_columns[1:])
             
             return combined_df, total_rows
         return None, 0
