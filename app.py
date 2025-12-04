@@ -1464,6 +1464,12 @@ elif page == "Database":
         # Reorder the dataframe (don't include remaining columns - strict ordering)
         display_df = display_df[ordered_cols]
         
+        # Convert all object-type columns to string to avoid pyarrow conversion errors
+        # This handles cases like TRL ranges ('6-7') and mixed-type columns
+        for col in display_df.columns:
+            if display_df[col].dtype == 'object':
+                display_df[col] = display_df[col].astype(str)
+        
         # Reset index to show row numbers starting from 1
         display_df = display_df.reset_index(drop=True)
         
@@ -1565,6 +1571,7 @@ elif page == "Database":
                 'TRL', 
                 headerName='Trl level', 
                 width=80,  # Small column for TRL numbers
+                type=['textColumn'],  # Explicitly set as text to handle ranges
                 enableCellTextSelection=True,
                 editable=False
             )
