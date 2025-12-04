@@ -1470,13 +1470,17 @@ elif page == "Database":
             if display_df[col].dtype == 'object':
                 display_df[col] = display_df[col].astype(str)
         
+        # Replace 'nan' strings with empty strings for cleaner display
+        display_df = display_df.replace('nan', '')
+        display_df = display_df.replace('None', '')
+        
         # Reset index to show row numbers starting from 1
         display_df = display_df.reset_index(drop=True)
         
         # Convert categories from semicolon-separated to comma-separated for better display
         if 'categories' in display_df.columns:
             display_df['categories'] = display_df['categories'].apply(
-                lambda x: str(x).replace(';', ',') if pd.notna(x) else ''
+                lambda x: str(x).replace(';', ',') if pd.notna(x) and x != '' else ''
             )
         
         st.info(f"📊 Showing {len(display_df)} entries | Use search and filters in the table below")        
