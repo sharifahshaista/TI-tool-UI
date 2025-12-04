@@ -986,12 +986,16 @@ elif page == "Database":
     st.header("📊 Database")
     st.markdown("Consolidated view of all summarised and processed crawled data with advanced search and filtering")
     
+    # Initialize reload trigger in session state
+    if 'reload_database' not in st.session_state:
+        st.session_state.reload_database = False
+    
     # Add reload button
     col_header1, col_header2 = st.columns([6, 1])
     with col_header2:
         if st.button("🔄 Reload from S3", use_container_width=True, help="Download latest files from S3 and refresh the database"):
-            # Clear the cache to force reload
-            load_all_csvs.clear()
+            # Set reload flag
+            st.session_state.reload_database = True
             
             # Clear local CSV files
             summarised_dir = Path("summarised_content")
@@ -1024,6 +1028,8 @@ elif page == "Database":
                         
                         if downloaded_count > 0:
                             st.success(f"✅ Downloaded {downloaded_count} file(s) from S3")
+                            # Clear the flag and rerun
+                            st.session_state.reload_database = False
                             st.rerun()
                         else:
                             st.warning("⚠️ No files were downloaded")
@@ -1099,8 +1105,13 @@ elif page == "Database":
     
     # Load and combine all CSVs
     @st.cache_data
-    def load_all_csvs(file_list):
-        """Load and combine all CSV files"""
+    def load_all_csvs(file_list, _reload_time=None):
+        """Load and combine all CSV files
+        
+        Args:
+            file_list: List of CSV file paths to load
+            _reload_time: Timestamp to force cache invalidation (prefixed with _ to exclude from hashing)
+        """
         all_data = []
         total_rows = 0
         
@@ -1315,8 +1326,15 @@ elif page == "Database":
             return combined_df, total_rows
         return None, 0
     
+    # Pass timestamp to force reload when button is pressed
+    reload_timestamp = datetime.now().timestamp() if st.session_state.reload_database else None
+    
     with st.spinner("Loading all CSV files..."):
-        combined_df, total_rows = load_all_csvs(csv_files)
+        combined_df, total_rows = load_all_csvs(csv_files, _reload_time=reload_timestamp)
+    
+    # Reset reload flag after loading
+    if st.session_state.reload_database:
+        st.session_state.reload_database = False
     
     if combined_df is None:
         st.error("Could not load any CSV files!")
