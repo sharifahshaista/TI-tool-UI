@@ -807,11 +807,17 @@ page = st.session_state.selected_page
 
 # Web Search Page
 if page == "Web Search":
-    st.header("Web Search")
-    st.markdown("AI-powered research with clarification, SERP generation, and web search")
-    
-    st.subheader("Research Pipeline")
-    st.markdown("Conduct comprehensive research with automated clarification and web search")
+    # Steps to use web search in an expandable section
+    with st.expander("ℹ️ **Steps to use the Web Search**", expanded=True):
+        st.markdown("""
+        1. **Enter Research Topic**: Input your research question or topic in the text area and click 'Start Research'
+        2. **Answer Clarifications**: For each clarification questions generated, provide your answers in the form and submit
+        3. **Execute Web Search**: Review the generated SERP queries and click 'Execute Web Search' to start searching
+        4. **Revieve Sources**: View the sources listed for each SERP query, and save the results for future reference
+                    
+        This feature essentially mimics 'Deep Research' without a generated report. The number of sources gathered is significantly more than 'Deep Research',
+        i.e. Each SERP query returns at least 10 sources with their respective URLs and snippets of its content.
+        """)
 
     # Input Section
     st.subheader("1. Research Topic")
