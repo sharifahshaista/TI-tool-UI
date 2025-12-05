@@ -1363,7 +1363,11 @@ elif page == "Database":
         duplicates_removed = rows_before_dedup - rows_after_dedup
         
         if duplicates_removed > 0:
-            st.info(f"ℹ️ Removed {duplicates_removed} duplicate entries based on URL")
+            st.info(f"ℹ️ Loaded {rows_before_dedup} rows → {rows_after_dedup} unique entries ({duplicates_removed} duplicates removed by URL)")
+        else:
+            st.success(f"✅ Loaded {rows_after_dedup} unique entries (no duplicates found)")
+    else:
+        st.success(f"✅ Loaded {len(combined_df)} entries")
     
     # Reindex starting from 1
     combined_df.index = range(1, len(combined_df) + 1)
@@ -1530,7 +1534,11 @@ elif page == "Database":
         else:
             st.caption(f"🔍 Searching for: **{keywords[0]}**")
     
-    st.info(f"Showing {len(filtered_df)} of {len(combined_df)} entries")
+    # Show filter results
+    if len(filtered_df) == len(combined_df):
+        st.info(f"📊 Showing all {len(filtered_df)} unique entries")
+    else:
+        st.info(f"📊 Showing {len(filtered_df)} of {len(combined_df)} unique entries (filtered)")
     
     st.divider()
     
