@@ -2874,7 +2874,6 @@ elif page == "About":
     - ✅ Automatic upload after processing
     - ✅ Download and delete via UI (LinkedIn)
     - ✅ Graceful fallback if S3 unavailable
-    ```
 
     ### Support & Troubleshooting
 
