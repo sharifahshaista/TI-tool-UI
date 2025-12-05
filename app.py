@@ -1058,21 +1058,16 @@ elif page == "Database":
                 st.error(f"❌ Error reloading from S3: {str(e)}")
     
     # Add instructions
-    with st.expander("ℹ️ How to use this page", expanded=False):
+    with st.expander("ℹ️ Steps to use Database", expanded=True):
         st.markdown("""
-        **Features:**
-        - **Reload from S3**: Click the 🔄 button to download the latest files from S3
-        - **Multi-file Selection**: Select multiple source files and dates to display simultaneously
-        - **Row Selection**: Use checkboxes to select multiple rows to view details
-        - **Search & Filter**: Use the search box and column filters to find specific entries
-        - **Date Range Filter**: Filter articles by publication date
-        - **Export**: Download filtered or complete database as CSV, JSON, or Excel
-        
-        **Tips:**
-        - Use the reload button when new files are added to S3
-        - Use the date range filter to find articles from specific time periods
-        - Combine filters for more precise results
-        - Export your filtered results in multiple formats
+        1. **Wait for loading of files**: The database will load all summarised CSV files from S3. Downloading logs will temporarily be shown in the UI.
+        2. **Use Filters**: Configure the start and end dates to filter articles by publication date. Search function identifies keywords in any column. Limit the database to certain sources.
+                    *Note: Keywords use boolean operator 'OR'.*
+        3. **Peruse the database results**: Review the entries in either the complete database or your filtered database.
+        4. **Export the database**: Download the complete or filtered database in CSV, JSON or Excel format for further analysis. 
+                    *Tip: You can export the database to feed it into other chatbots of your preference, like Perplexity, ChatGPT or AIBots.
+
+        **IMPORTANT**: As the database is being added new files over time, do click on "Reload from S3" at the top right corner to get the latest data files!
         """)
     
     # Import AgGrid
@@ -2895,7 +2890,19 @@ elif page == "About":
     """)
 
 elif page == "LinkedIn Home Feed Monitor":
-    st.header("📲 LinkedIn Home Feed Monitor")
+    with st.expander("ℹ️ Steps to use Linkedin Home Feed Monitor", expanded=True):
+        st.markdown("""
+        1. **Wait for loading of files**: The database will load all Linkedin posts data files from S3. Downloading logs will temporarily be shown in the UI.
+        2. **Use Filters**: Configure the start and end dates to filter articles by publication date. Search function identifies keywords in any column.
+                    *Note: Keywords use boolean operator 'OR'.*
+        3. **Peruse the database results**: Review the entries in either the complete database or your filtered database.
+        4. **Export the database**: Download the complete or filtered database in CSV, JSON or Excel format for further analysis. 
+                    *Tip: You can export the database to feed it into other chatbots of your preference, like Perplexity, ChatGPT or AIBots.
+
+        **IMPORTANT**: As the database is being added new files over time, do click on "Reload from S3" at the top right corner to get the latest data files!
+                    
+        This interface displays LinkedIn posts collected from a dedicated Linkedin account that follows specific VCs and companies of interest.
+        """)
     
     # Import AgGrid
     from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
@@ -3011,6 +3018,9 @@ elif page == "LinkedIn Home Feed Monitor":
             st.info("📭 No LinkedIn posts found in S3. Upload some CSV files to the `linkedin_data/` folder.")
             st.stop()
         
+        # Create a container for download logs
+        download_log = st.container()
+        
         # Load all CSV files into a combined DataFrame
         all_data = []
         loaded_files = []
@@ -3029,20 +3039,19 @@ elif page == "LinkedIn Home Feed Monitor":
                         all_data.append(df)
                         loaded_files.append(csv_file.split('/')[-1])
                         
-                        # Show download success message
-                        st.success(f"✓ Downloaded: {csv_file.split('/')[-1]}")
+                        # Show download success message in the container
+                        download_log.success(f"✓ Downloaded: {csv_file.split('/')[-1]}")
                         
                         temp_path.unlink()
                 except Exception as e:
-                    st.warning(f"Failed to load {csv_file}: {e}")
+                    download_log.warning(f"Failed to load {csv_file}: {e}")
         
         if not all_data:
             st.error("Failed to load any LinkedIn data from S3")
             st.stop()
         
         # Show final success message
-        st.success(f"✅ Successfully retrieved {len(loaded_files)} file(s) from S3")
-        time.sleep(5)  # Display messages for 5 seconds
+        download_log.success(f"✅ Successfully retrieved {len(loaded_files)} file(s) from S3")
         
         # Combine all dataframes
         combined_df = pd.concat(all_data, ignore_index=True)
@@ -3056,11 +3065,13 @@ elif page == "LinkedIn Home Feed Monitor":
             duplicates_removed = original_count - len(combined_df)
             
             if duplicates_removed > 0:
-                st.success(f"✅ Loaded {original_count} posts from {len(loaded_files)} file(s) | Removed {duplicates_removed} duplicates | {len(combined_df)} unique posts remaining")
+                download_log.success(f"✅ Loaded {original_count} posts from {len(loaded_files)} file(s) | Removed {duplicates_removed} duplicates | {len(combined_df)} unique posts remaining")
             else:
-                st.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s) | No duplicates found")
+                download_log.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s) | No duplicates found")
         else:
-            st.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s)")
+            download_log.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s)")
+        
+        st.divider()
         
         # Keep original column names as specified
         # Ensure columns exist with exact names
