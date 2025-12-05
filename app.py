@@ -2598,18 +2598,33 @@ When answering analytical questions (e.g., "what technologies are mentioned most
 
 If the context doesn't contain relevant information, say so clearly.
 
-CRITICAL CITATION RULES:
-You MUST accurately cite all your outputs with your sources using markdown hyperlink format when referencing information.
+CRITICAL CITATION REQUIREMENTS - READ CAREFULLY:
+You MUST cite EVERY factual claim, statistic, or piece of information with in-text citations.
 
-IMPORTANT: 
-1. The user message contains a "CITATION GUIDE" section with exact URLs you MUST use
-2. ONLY use URLs that are explicitly provided in that Citation Guide
-3. NEVER create, modify, shorten, or guess URLs - use them EXACTLY as provided
-4. Format: [Source Title](EXACT_URL_FROM_CITATION_GUIDE)
-5. If a source has no valid URL in the Citation Guide, reference it by title only without a hyperlink
+CITATION FORMAT - Follow this EXACTLY:
+1. **In-text citation**: Place citations immediately after each claim using markdown hyperlinks
+2. **Format**: [Source Title](EXACT_URL)
+3. **Example**: "According to recent reports, hydrogen technology is advancing rapidly [Hydrogen Central](https://hydrogen-central.com/article-url). The technology has reached TRL 7 [TechCrunch](https://techcrunch.com/article-url)."
 
-Example of correct citation: 'According to [TechCrunch Article](https://techcrunch.com/2024/11/15/full-article-url), the technology...'
-The URL must be copied EXACTLY from the Citation Guide - do not modify it in any way.
+CRITICAL RULES:
+✅ DO:
+- Cite EVERY statement of fact with [Title](URL)
+- Use the EXACT URLs from the Citation Guide (provided in the user message)
+- Place citations immediately after the relevant sentence or claim
+- Use multiple citations if information comes from multiple sources
+- Reference specific details like dates, numbers, or quotes with citations
+
+❌ DO NOT:
+- Create, modify, shorten, or guess URLs - copy them EXACTLY from Citation Guide
+- Leave any factual claims uncited
+- Use footnote-style citations like [1] or [2]
+- Group all citations at the end of paragraphs
+- Reference sources without providing the URL hyperlink
+
+EXAMPLE OF CORRECT CITATION STYLE:
+"Recent developments in carbon capture technology have shown promising results [Carbon Herald](https://carbonherald.com/exact-url). The technology has achieved a 95% capture rate and is expected to scale commercially by 2026 [TechCrunch](https://techcrunch.com/exact-url). Industry experts predict this will reduce emissions by 30% [Hydrogen Central](https://hydrogen-central.com/exact-url)."
+
+Remember: The user message contains a "CITATION GUIDE" with the exact URLs you must use. Copy them EXACTLY - no modifications.
 
 The knowledge base includes articles from sources like TechCrunch, Carbon Herald, Hydrogen Central, etc., with metadata about:
 - Technology areas (AI, renewable energy, carbon tech, etc.)
@@ -2670,27 +2685,37 @@ The knowledge base includes articles from sources like TechCrunch, Carbon Herald
 AVAILABLE SOURCES WITH URLS:
 {sources_text}
 
-CITATION GUIDE - Use EXACTLY these URLs when citing sources:
+📌 CITATION GUIDE - Use EXACTLY these URLs when citing (copy-paste them as-is):
 {citation_guide}
 
 Source Metadata (for analysis):
 {metadata_text}
 
-CRITICAL CITATION INSTRUCTIONS:
-- You MUST cite information using the EXACT URLs provided above
-- Use the format: [Source Title](URL) where URL is taken EXACTLY from the "Citation Guide" above
-- NEVER modify, shorten, or create your own URLs
-- ONLY use the URLs explicitly listed in the Citation Guide
-- If a source doesn't have a valid URL in the guide, reference it by title only without a link
+🎯 MANDATORY CITATION REQUIREMENTS:
+1. EVERY fact, statistic, or claim MUST be followed by an in-text citation
+2. Citation format: [Source Title](EXACT_URL_FROM_CITATION_GUIDE_ABOVE)
+3. Place citations IMMEDIATELY after each claim, not at the end of paragraphs
+4. Use the URLs EXACTLY as listed in the Citation Guide - do not modify them
+5. If multiple sources support a claim, cite all: [Source 1](URL1) [Source 2](URL2)
+
+CORRECT EXAMPLE:
+"The technology has reached TRL 7 and is ready for demonstration [TechCrunch](https://techcrunch.com/exact-url). Three startups are working on similar solutions [Carbon Herald](https://carbonherald.com/exact-url)."
+
+INCORRECT EXAMPLES:
+❌ "The technology has reached TRL 7 and is ready for demonstration." (Missing citation)
+❌ "The technology has reached TRL 7 [1]." (Don't use footnote numbers)
+❌ "According to sources, the technology..." (Too vague, cite specific source with URL)
 
 For analytical questions about trends, frequencies, or patterns:
 - Analyse ALL provided sources
-- Count mentions across different articles
+- Count mentions across different articles  
 - Note publication dates to verify they match the requested timeframe
-- Provide specific examples with citations using the EXACT URLs above
+- Provide specific examples with in-text citations using EXACT URLs from the Citation Guide above
+- Every statistic or count must be cited with the sources that contain that information
 
 Question: {prompt}
-Answer: """
+
+Your answer (remember to cite EVERY fact with [Title](URL) format):
                     
                     # Stream response
                     response_placeholder = st.empty()
