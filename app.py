@@ -2717,6 +2717,7 @@ For analytical questions about trends, frequencies, or patterns:
 Question: {prompt}
 
 Your answer (remember to cite EVERY fact with [Title](URL) format):
+"""
                     
                     # Stream response
                     response_placeholder = st.empty()
