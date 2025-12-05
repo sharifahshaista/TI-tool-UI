@@ -2545,7 +2545,7 @@ elif page == "Chatbot":
                         for result in results:
                             metadata = result['metadata']
                             
-                            # Add to sources with ALL available fields
+                            # Add to sources with ALL available fields including similarity score
                             sources.append({
                                 "url": metadata.get("url", ""),
                                 "title": metadata.get("title", "Untitled"),
@@ -2556,7 +2556,8 @@ elif page == "Chatbot":
                                 "tech": metadata.get("tech", ""),
                                 "trl": metadata.get("trl", ""),
                                 "startup": metadata.get("startup", ""),
-                                "source": metadata.get("source", "")
+                                "source": metadata.get("source", ""),
+                                "similarity_score": result.get("score", 0.0)  # Add similarity score
                             })
                             
                             # Add to context (use the chunk text)
@@ -2758,13 +2759,26 @@ Your answer (remember to cite EVERY fact with [Title](URL) format):
                                 if not title or title.lower() in ['none', 'untitled', 'n/a']:
                                     title = source.get('url', 'Untitled')
                                 
-                                st.markdown(f"**{i}. [{title}]({source['url']})**")
+                                # Get similarity score and format it as percentage
+                                similarity_score = source.get('similarity_score', 0.0)
+                                score_percentage = f"{similarity_score * 100:.1f}%"
+                                
+                                # Color-code the score (green for high relevance, yellow for medium, orange for lower)
+                                if similarity_score >= 0.7:
+                                    score_color = "🟢"  # High relevance
+                                elif similarity_score >= 0.5:
+                                    score_color = "🟡"  # Medium relevance
+                                else:
+                                    score_color = "🟠"  # Lower relevance
+                                
+                                st.markdown(f"**{i}. [{title}]({source['url']})** {score_color} Relevance: **{score_percentage}**")
                                 
                                 # Display all fields in a structured database-like format
                                 col1, col2 = st.columns([1, 3])
                                 
                                 with col1:
                                     st.markdown("**📊 Database Fields:**")
+                                    st.markdown(f"**Similarity Score:** {score_percentage} {score_color}")
                                     st.markdown(f"**Publication Date:** {source.get('publication_date', 'N/A')}")
                                     st.markdown(f"**Categories:** {source.get('categories', 'N/A')}")
                                     st.markdown(f"**Dimension:** {source.get('dimension', 'N/A')}")
