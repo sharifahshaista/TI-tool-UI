@@ -1086,31 +1086,38 @@ elif page == "Database":
             from aws_storage import get_storage
             s3_storage = get_storage()
             
+            # Create a placeholder for download logs
+            download_logs = st.empty()
+            
             with st.spinner("📥 Checking S3 for summarised data..."):
                 # List all CSV files in S3 summarised_content prefix
                 s3_csv_files = s3_storage.list_files(prefix="summarised_content/", suffix=".csv")
                 
                 if s3_csv_files:
-                    st.info(f"Found {len(s3_csv_files)} CSV file(s) in S3. Downloading...")
-                    
-                    # Download each file
-                    for s3_key in s3_csv_files:
-                        file_name = s3_key.split('/')[-1]
-                        local_path = summarised_dir / file_name
+                    with download_logs.container():
+                        st.info(f"Found {len(s3_csv_files)} CSV file(s) in S3. Downloading...")
                         
-                        if s3_storage.download_file(s3_key, str(local_path)):
-                            st.success(f"✓ Downloaded: {file_name}")
-                        else:
-                            st.warning(f"⚠️ Failed to download: {file_name}")
+                        # Download each file
+                        for s3_key in s3_csv_files:
+                            file_name = s3_key.split('/')[-1]
+                            local_path = summarised_dir / file_name
+                            
+                            if s3_storage.download_file(s3_key, str(local_path)):
+                                st.success(f"✓ Downloaded: {file_name}")
+                            else:
+                                st.warning(f"⚠️ Failed to download: {file_name}")
+                        
+                        # Refresh the csv_files list
+                        csv_files = list(summarised_dir.glob("*.csv"))
+                        
+                        if csv_files:
+                            st.success(f"✅ Successfully retrieved {len(csv_files)} file(s) from S3")
                     
-                    # Refresh the csv_files list
-                    csv_files = list(summarised_dir.glob("*.csv"))
-                    
-                    if csv_files:
-                        st.success(f"✅ Successfully retrieved {len(csv_files)} file(s) from S3")
-                        time.sleep(5)  # Display messages for 5 seconds
+                    # Display messages for 5 seconds then clear
+                    time.sleep(5)
+                    download_logs.empty()
                 else:
-                    st.info("No CSV files found in S3 summarised_content folder")
+                    download_logs.info("No CSV files found in S3 summarised_content folder")
         except Exception as e:
             st.warning(f"⚠️ Could not retrieve from S3: {str(e)}")
     
@@ -2901,7 +2908,7 @@ elif page == "LinkedIn Home Feed Monitor":
 
         **IMPORTANT**: As the database is being added new files over time, do click on "Reload from S3" at the top right corner to get the latest data files!
                     
-        This interface displays LinkedIn posts collected from a dedicated Linkedin account that follows specific VCs and companies of interest.
+        This interface displays LinkedIn posts collected from a dedicated Linkedin account that follows specific VCs and companies of interest. 
         """)
     
     # Import AgGrid
@@ -3018,40 +3025,38 @@ elif page == "LinkedIn Home Feed Monitor":
             st.info("📭 No LinkedIn posts found in S3. Upload some CSV files to the `linkedin_data/` folder.")
             st.stop()
         
-        # Create a container for download logs
-        download_log = st.container()
+        # Create a placeholder for download logs that can be cleared
+        download_logs = st.empty()
         
         # Load all CSV files into a combined DataFrame
         all_data = []
         loaded_files = []
         
         with st.spinner(f"Loading {len(csv_files)} file(s) from S3..."):
-            for csv_file in csv_files:
-                try:
-                    # Download to temporary location
-                    temp_path = Path(f"/tmp/{csv_file.split('/')[-1]}")
-                    if s3_storage.download_file(csv_file, str(temp_path)):
-                        df = pd.read_csv(temp_path)
-                        
-                        # Add source file metadata
-                        df['source_file'] = csv_file.split('/')[-1]
-                        
-                        all_data.append(df)
-                        loaded_files.append(csv_file.split('/')[-1])
-                        
-                        # Show download success message in the container
-                        download_log.success(f"✓ Downloaded: {csv_file.split('/')[-1]}")
-                        
-                        temp_path.unlink()
-                except Exception as e:
-                    download_log.warning(f"Failed to load {csv_file}: {e}")
+            with download_logs.container():
+                for csv_file in csv_files:
+                    try:
+                        # Download to temporary location
+                        temp_path = Path(f"/tmp/{csv_file.split('/')[-1]}")
+                        if s3_storage.download_file(csv_file, str(temp_path)):
+                            df = pd.read_csv(temp_path)
+                            
+                            # Add source file metadata
+                            df['source_file'] = csv_file.split('/')[-1]
+                            
+                            all_data.append(df)
+                            loaded_files.append(csv_file.split('/')[-1])
+                            
+                            # Show download success message
+                            st.success(f"✓ Downloaded: {csv_file.split('/')[-1]}")
+                            
+                            temp_path.unlink()
+                    except Exception as e:
+                        st.warning(f"Failed to load {csv_file}: {e}")
         
         if not all_data:
             st.error("Failed to load any LinkedIn data from S3")
             st.stop()
-        
-        # Show final success message
-        download_log.success(f"✅ Successfully retrieved {len(loaded_files)} file(s) from S3")
         
         # Combine all dataframes
         combined_df = pd.concat(all_data, ignore_index=True)
@@ -3064,12 +3069,37 @@ elif page == "LinkedIn Home Feed Monitor":
             combined_df = combined_df.drop_duplicates(subset=['Content of post'], keep='first')
             duplicates_removed = original_count - len(combined_df)
             
-            if duplicates_removed > 0:
-                download_log.success(f"✅ Loaded {original_count} posts from {len(loaded_files)} file(s) | Removed {duplicates_removed} duplicates | {len(combined_df)} unique posts remaining")
-            else:
-                download_log.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s) | No duplicates found")
+            # Show final summary in the download logs container
+            with download_logs.container():
+                for csv_file in csv_files:
+                    file_name = csv_file.split('/')[-1]
+                    if file_name in loaded_files:
+                        st.success(f"✓ Downloaded: {file_name}")
+                
+                st.success(f"✅ Successfully retrieved {len(loaded_files)} file(s) from S3")
+                
+                if duplicates_removed > 0:
+                    st.success(f"✅ Loaded {original_count} posts from {len(loaded_files)} file(s) | Removed {duplicates_removed} duplicates | {len(combined_df)} unique posts remaining")
+                else:
+                    st.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s) | No duplicates found")
+            
+            # Display messages for 5 seconds then clear
+            time.sleep(5)
+            download_logs.empty()
         else:
-            download_log.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s)")
+            # Show final summary in the download logs container
+            with download_logs.container():
+                for csv_file in csv_files:
+                    file_name = csv_file.split('/')[-1]
+                    if file_name in loaded_files:
+                        st.success(f"✓ Downloaded: {file_name}")
+                
+                st.success(f"✅ Successfully retrieved {len(loaded_files)} file(s) from S3")
+                st.success(f"✅ Loaded {len(combined_df)} posts from {len(loaded_files)} file(s)")
+            
+            # Display messages for 5 seconds then clear
+            time.sleep(5)
+            download_logs.empty()
         
         st.divider()
         
