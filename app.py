@@ -1874,6 +1874,8 @@ elif page == "Chatbot":
         2. **Configure Settings**: Adjust the number of documents to retrieve in the sidebar
         3. **Start Chatting**: Type your question in the chat input box below
         4. **View Sources**: Click on the expandable sections to see source documents used for answers
+
+        **Note**: This chatbot cannot handle multi-turn conversations, i.e. unable to handle any follow-up questions related to previous query's context.
         """)
     
     # Initialize session state for chat
