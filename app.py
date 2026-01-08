@@ -1747,8 +1747,7 @@ elif page == "Database":
     desired_order = [
         'title',
         'Indicator',  # summary/indicator column
-        'publication_date',  # publication date (matches CSV column name)
-        'processed_date_display',  # date when file was processed (DD-MM-YYYY format)
+        'date',  # publication date (renamed from publication_date)
         'categories',
         'Dimension',  # matches CSV column name
         'Tech',  # matches CSV column name
