@@ -1060,11 +1060,13 @@ elif page == "Database":
     # Add instructions
     with st.expander("ℹ️ Steps to use Database", expanded=True):
         st.markdown("""
-        1. **Wait for loading of files**: The database will load all summarised CSV files from S3. Downloading logs will temporarily be shown in the UI.
-        2. **Use Filters**: Configure the start and end dates to filter articles by publication date. Search function identifies keywords in any column. Limit the database to certain sources.
+        1. **Check the list of crawled websites**: This database contains data of websites listed in a Google sheet. Check it out here: [List of Crawled Websites](https://docs.google.com/spreadsheets/d/1FDIBxrgGwcR7Oh9DUFyNIJHY1N8ZjVXEpgnuX7tyV0c/edit?usp=sharing)
+
+        2. **Wait for loading of files**: The database will load all summarised CSV files from S3. Downloading logs will temporarily be shown in the UI.
+        3. **Use Filters**: Configure the start and end dates to filter articles by publication date. Search function identifies keywords in any column. Limit the database to certain sources.
                     *Note: Keywords use boolean operator 'OR'.*
-        3. **Peruse the database results**: Review the entries in either the complete database or your filtered database.
-        4. **Export the database**: Download the complete or filtered database in CSV, JSON or Excel format for further analysis. 
+        4. **Peruse the database results**: Review the entries in either the complete database or your filtered database.
+        5. **Export the database**: Download the complete or filtered database in CSV, JSON or Excel format for further analysis. 
                     *Tip: You can export the database to feed it into other chatbots of your preference, like Perplexity, ChatGPT or AIBots.
 
         **IMPORTANT**: As the database is being added new files over time, do click on "Reload from S3" at the top right corner to get the latest data files!
@@ -2901,12 +2903,11 @@ elif page == "About":
 elif page == "LinkedIn Home Feed Monitor":
     with st.expander("ℹ️ Steps to use Linkedin Home Feed Monitor", expanded=True):
         st.markdown("""
-        1. **Check the list of crawled websites**: This database contains data of websites listed in a Google sheet. Check it out here: [List of Crawled Websites](https://docs.google.com/spreadsheets/d/1FDIBxrgGwcR7Oh9DUFyNIJHY1N8ZjVXEpgnuX7tyV0c/edit?usp=sharing)
-        2. **Wait for loading of files**: The database will load all Linkedin posts data files from S3. Downloading logs will temporarily be shown in the UI.
-        3. **Use Filters**: Configure the start and end dates to filter articles by publication date. Search function identifies keywords in any column.
+        1. **Wait for loading of files**: The database will load all Linkedin posts data files from S3. Downloading logs will temporarily be shown in the UI.
+        2. **Use Filters**: Configure the start and end dates to filter articles by publication date. Search function identifies keywords in any column.
                     *Note: Keywords use boolean operator 'OR'.*
-        4. **Peruse the database results**: Review the entries in either the complete database or your filtered database.
-        5. **Export the database**: Download the complete or filtered database in CSV, JSON or Excel format for further analysis. 
+        3. **Peruse the database results**: Review the entries in either the complete database or your filtered database.
+        4. **Export the database**: Download the complete or filtered database in CSV, JSON or Excel format for further analysis. 
                     *Tip: You can export the database to feed it into other chatbots of your preference, like Perplexity, ChatGPT or AIBots.
 
         **IMPORTANT**: As the database is being added new files over time, do click on "Reload from S3" at the top right corner to get the latest data files!
